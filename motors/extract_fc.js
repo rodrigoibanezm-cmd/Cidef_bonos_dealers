@@ -1,7 +1,17 @@
 import { runDocumentExtraction } from "../lib/run_document_extraction.js";
 import { FC_PROMPT_V1 } from "../prompts/fc.js";
+import { FC_VIN_PROMPT_V1 } from "../prompts/fc_vin.js";
 
-const CONTRACT_VERSION = "1";
+const CONTRACT_VERSION = "2";
+
+const FC_VIN_SCHEMA_V1 = {
+  type: "object",
+  properties: {
+    vin_documento: { type: "string", nullable: true },
+    readable: { type: "boolean" },
+  },
+  required: ["vin_documento", "readable"],
+};
 
 const FC_SCHEMA_V1 = {
   type: "object",
@@ -13,38 +23,55 @@ const FC_SCHEMA_V1 = {
     nota_venta: { type: "string", nullable: true },
     readable: { type: "boolean" },
   },
-  required: [
-    "vin",
-    "folio_factura_compra",
-    "fecha_factura_compra",
-    "precio_compra_total",
-    "nota_venta",
-    "readable",
-  ],
+  required: ["vin", "folio_factura_compra", "fecha_factura_compra", "precio_compra_total", "nota_venta", "readable"],
 };
 
-export async function extractFc({ tenantId, fileId, file }) {
+function normalizeVin(value) {
+  return String(value || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+}
+
+export async function extractFc({ tenantId, fileId, expectedVin, file }) {
   if (!tenantId) throw new Error("tenantId is required");
   if (!fileId) throw new Error("fileId is required");
+  if (!expectedVin) throw new Error("expectedVin is required");
   if (!file?.base64 || !file?.mimeType) throw new Error("file is required");
 
-  const extracted = await runDocumentExtraction({
-    prompt: FC_PROMPT_V1,
-    schema: FC_SCHEMA_V1,
-    file,
-  });
+  const vinCheck = await runDocumentExtraction({ prompt: FC_VIN_PROMPT_V1, schema: FC_VIN_SCHEMA_V1, file });
+  const vinDocumento = normalizeVin(vinCheck.vin_documento);
+  const vinEsperado = normalizeVin(expectedVin);
+  const vinMatch = Boolean(vinDocumento && vinEsperado && vinDocumento === vinEsperado);
+
+  if (!vinMatch) {
+    return {
+      tenant_id: tenantId,
+      document_type: "FC",
+      contract_version: CONTRACT_VERSION,
+      file_id: fileId,
+      expected_vin: vinEsperado,
+      vin_documento: vinDocumento || null,
+      vin_match: false,
+      readable: vinCheck.readable === true,
+      parse_error: vinCheck._parse_error === true,
+      status: vinDocumento ? "VIN_MISMATCH" : "VIN_UNREADABLE",
+    };
+  }
+
+  const extracted = await runDocumentExtraction({ prompt: FC_PROMPT_V1, schema: FC_SCHEMA_V1, file });
 
   return {
     tenant_id: tenantId,
     document_type: "FC",
     contract_version: CONTRACT_VERSION,
     file_id: fileId,
-    vin: extracted.vin ?? null,
+    expected_vin: vinEsperado,
+    vin_documento: vinDocumento,
+    vin_match: true,
     folio_factura_compra: extracted.folio_factura_compra ?? null,
     fecha_factura_compra: extracted.fecha_factura_compra ?? null,
     precio_compra_total: extracted.precio_compra_total ?? null,
     nota_venta: extracted.nota_venta ?? null,
     readable: extracted.readable === true,
     parse_error: extracted._parse_error === true,
+    status: "OK",
   };
 }
