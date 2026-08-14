@@ -23,7 +23,7 @@ export default function Home() {
     if (!vin.trim()) return setMessage("Falta VIN.");
 
     setUploading(true);
-    setMessage(`Subiendo, validando VIN y extrayendo ${type}...`);
+    setMessage(`Subiendo y procesando ${type}...`);
 
     try {
       const body = new FormData();
@@ -46,6 +46,10 @@ export default function Home() {
 
       if (type === "FV") {
         return setMessage(`OK · VIN ${x.vin_documento} · Folio ${x.folio_factura_venta ?? "null"} · Fecha ${x.fecha_factura_venta ?? "null"} · Total ${x.precio_venta_total ?? "null"} · Forum ${x.financiado_forum ?? "null"}`);
+      }
+
+      if (type === "INSCRIP") {
+        return setMessage(`OK · VIN inscripción ${x.vin_documento}`);
       }
     } catch (error) {
       setMessage(`Error: ${error.message}`);
@@ -90,6 +94,7 @@ export default function Home() {
 
           <button type="button" onClick={() => testDocument("FC")} disabled={uploading}>Probar FC</button>
           <button type="button" onClick={() => testDocument("FV")} disabled={uploading}>Probar FV</button>
+          <button type="button" onClick={() => testDocument("INSCRIP")} disabled={uploading}>Probar INSCRIP</button>
           <button type="submit">Continuar</button>
           {message && <p className="message">{message}</p>}
         </form>
