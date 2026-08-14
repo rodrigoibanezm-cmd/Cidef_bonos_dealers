@@ -16,14 +16,12 @@ const FC_VIN_SCHEMA_V1 = {
 const FC_SCHEMA_V1 = {
   type: "object",
   properties: {
-    vin: { type: "string", nullable: true },
-    folio_factura_compra: { type: "string", nullable: true },
+    folio_factura_compra: { type: "integer", nullable: true },
     fecha_factura_compra: { type: "string", nullable: true },
     precio_compra_total: { type: "integer", nullable: true },
-    nota_venta: { type: "string", nullable: true },
-    readable: { type: "boolean" },
+    nota_venta: { type: "integer", nullable: true },
   },
-  required: ["vin", "folio_factura_compra", "fecha_factura_compra", "precio_compra_total", "nota_venta", "readable"],
+  required: ["folio_factura_compra", "fecha_factura_compra", "precio_compra_total", "nota_venta"],
 };
 
 function normalizeVin(value) {
@@ -67,8 +65,7 @@ export async function extractFc({ tenantId, fileId, expectedVin, file }) {
     fecha_factura_compra: extracted.fecha_factura_compra ?? null,
     precio_compra_total: extracted.precio_compra_total ?? null,
     nota_venta: extracted.nota_venta ?? null,
-    readable: extracted.readable === true,
     parse_error: extracted._parse_error === true,
-    status: "OK",
+    status: extracted._parse_error === true ? "EXTRACTION_ERROR" : "OK",
   };
 }
