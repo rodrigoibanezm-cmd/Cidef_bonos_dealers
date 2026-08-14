@@ -57,23 +57,23 @@ archivo_original
 
 ## Arquitectura de extracción
 
-Se adopta el patrón probado en CMS:
-
 ```txt
 documento original
 → motor por tipo documental
 → prompt separado
 → helper Gemini
-→ JSON cerrado
+→ JSON cerrado por schema del motor
 → validaciones deterministas posteriores
 ```
 
 El LLM extrae; no aprueba, no calcula bonos y no decide reglas de negocio.
 
-Modelos alineados con CMS:
+Configuración base:
 
 ```txt
-extracción base: gemini-3.1-flash-lite
+extracción: gemini-3.5-flash-lite
+thinking: minimal
+structured output: schema definido por cada motor
 SDK: @google/genai 1.8.0
 ```
 
@@ -81,7 +81,7 @@ Variables:
 
 ```txt
 GEMINI_API_KEY       obligatoria
-GEMINI_EXTRACT_MODEL opcional; default gemini-3.1-flash-lite
+GEMINI_EXTRACT_MODEL opcional; default gemini-3.5-flash-lite
 ```
 
 ## Primer motor global
@@ -104,11 +104,9 @@ readable
 parse_error
 ```
 
-El prompt vive separado en `prompts/fc.js`. La llamada al modelo está encapsulada en `lib/gemini_client.js` y `lib/run_document_extraction.js`.
+El schema de salida pertenece al motor. El prompt vive separado en `prompts/fc.js`. La llamada al modelo está encapsulada en `lib/gemini_client.js` y `lib/run_document_extraction.js`.
 
 ## Almacenamiento
-
-Decisión de arquitectura:
 
 ```txt
 Google Drive → documentos originales
