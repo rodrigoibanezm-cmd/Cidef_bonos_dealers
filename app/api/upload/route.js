@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { uploadToDrive } from "../../../lib/google_drive.js";
+import { validateFcVin } from "../../../motors/extract_fc.js";
 
 export const runtime = "nodejs";
 
@@ -27,22 +28,23 @@ export async function POST(request) {
     const timestamp = new Date().toISOString().replace(/[-:.TZ]/g, "");
     const generatedName = `${vin}_${documentType}_${timestamp}.${extension}`;
 
-    const uploaded = await uploadToDrive({
-      buffer: bytes,
-      name: generatedName,
-      mimeType: file.type,
-    });
+    const uploaded = await uploadToDrive({ buffer: bytes, name: generatedName, mimeType: file.type });
 
-    return NextResponse.json({
-      ok: true,
-      document_type: documentType,
-      vin,
-      file: uploaded,
-    });
+    let validation = null;
+    if (documentType === "FC") {
+      validation = await validateFcVin({
+        tenantId: "dealer_demo",
+        fileId: uploaded.id,
+        expectedVin: vin,
+        file: { base64: bytes.toString("base64"), mimeType: file.type },
+      });
+    }
+
+    return NextResponse.json({ ok: true, document_type: documentType, vin, file: uploaded, validation });
   } catch (error) {
-    console.error("Drive upload failed", error);
+    console.error("Upload/validation failed", error);
     return NextResponse.json(
-      { ok: false, error: error?.message || "Drive upload failed" },
+      { ok: false, error: error?.message || "Upload/validation failed" },
       { status: 500 }
     );
   }
