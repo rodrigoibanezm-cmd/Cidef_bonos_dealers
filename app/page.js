@@ -15,6 +15,7 @@ export default function Home() {
   const [files, setFiles] = useState({});
   const [message, setMessage] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [forumRequired, setForumRequired] = useState(false);
 
   async function testDocument(type) {
     const key = type.toLowerCase();
@@ -45,6 +46,11 @@ export default function Home() {
       }
 
       if (type === "FV") {
+        const requiresForum = x.financiado_forum === true;
+        setForumRequired(requiresForum);
+        if (!requiresForum) {
+          setFiles((current) => ({ ...current, carta: null }));
+        }
         return setMessage(`OK · VIN ${x.vin_documento} · Folio ${x.folio_factura_venta ?? "null"} · Fecha ${x.fecha_factura_venta ?? "null"} · Total ${x.precio_venta_total ?? "null"} · Forum ${x.financiado_forum ?? "null"}`);
       }
 
@@ -63,6 +69,7 @@ export default function Home() {
     const missing = DOCS.filter((d) => d.required && !files[d.key]);
     if (!vin.trim()) return setMessage("Falta VIN.");
     if (missing.length) return setMessage(`Falta: ${missing.map((d) => d.label).join(", ")}`);
+    if (forumRequired && !files.carta) return setMessage("Falta CARTA · Forum.");
     setMessage("Carga completa para continuar al procesamiento.");
   }
 
@@ -80,16 +87,27 @@ export default function Home() {
           </label>
 
           <div className="docs">
-            {DOCS.map((doc) => (
-              <label className="upload" key={doc.key}>
-                <div>
-                  <strong>{doc.label}</strong>
-                  <small>{doc.required ? "Obligatorio" : "Opcional"}</small>
-                </div>
-                <input type="file" accept="application/pdf,image/*" onChange={(e) => setFiles((current) => ({ ...current, [doc.key]: e.target.files?.[0] || null }))} />
-                <span className="fileName">{files[doc.key]?.name || "Seleccionar archivo"}</span>
-              </label>
-            ))}
+            {DOCS.map((doc) => {
+              const isCarta = doc.key === "carta";
+              const disabled = isCarta && !forumRequired;
+              const required = doc.required || (isCarta && forumRequired);
+
+              return (
+                <label className="upload" key={doc.key} style={disabled ? { opacity: 0.45 } : undefined}>
+                  <div>
+                    <strong>{doc.label}</strong>
+                    <small>{required ? "Obligatorio" : isCarta ? "Se habilita si FV indica Forum" : "Opcional"}</small>
+                  </div>
+                  <input
+                    type="file"
+                    accept="application/pdf,image/*"
+                    disabled={disabled}
+                    onChange={(e) => setFiles((current) => ({ ...current, [doc.key]: e.target.files?.[0] || null }))}
+                  />
+                  <span className="fileName">{files[doc.key]?.name || (disabled ? "Deshabilitado" : "Seleccionar archivo")}</span>
+                </label>
+              );
+            })}
           </div>
 
           <button type="button" onClick={() => testDocument("FC")} disabled={uploading}>Probar FC</button>
