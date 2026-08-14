@@ -1,0 +1,9 @@
+{
+  "name": "cidef-bonos-dealers",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@google/genai": "1.8.0"
+  }
+}
