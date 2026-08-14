@@ -19,9 +19,10 @@ export default function Home() {
   async function testFcUpload() {
     const file = files.fc;
     if (!file) return setMessage("Selecciona primero el FC.");
+    if (!vin.trim()) return setMessage("Falta VIN.");
 
     setUploading(true);
-    setMessage("Subiendo FC a Google Drive...");
+    setMessage("Subiendo y validando VIN...");
 
     try {
       const body = new FormData();
@@ -33,9 +34,14 @@ export default function Home() {
       const result = await response.json();
       if (!response.ok || !result.ok) throw new Error(result.error || "Error de subida");
 
-      setMessage(`FC guardado en Drive. file_id: ${result.file.id}`);
+      const validation = result.validation;
+      if (validation?.vin_match) {
+        setMessage(`OK · VIN coincide: ${validation.vin_documento}`);
+      } else {
+        setMessage(`${validation?.status || "ERROR"} · VIN documento: ${validation?.vin_documento || "no leído"}`);
+      }
     } catch (error) {
-      setMessage(`Error Drive: ${error.message}`);
+      setMessage(`Error: ${error.message}`);
     } finally {
       setUploading(false);
     }
@@ -85,7 +91,7 @@ export default function Home() {
           </div>
 
           <button type="button" onClick={testFcUpload} disabled={uploading}>
-            {uploading ? "Subiendo..." : "Probar FC → Drive"}
+            {uploading ? "Validando..." : "Probar FC → Drive + VIN"}
           </button>
           <button type="submit">Continuar</button>
           {message && <p className="message">{message}</p>}
