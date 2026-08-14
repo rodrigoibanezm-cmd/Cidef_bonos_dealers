@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { uploadToDrive } from "../../../lib/google_drive.js";
 import { extractFc } from "../../../motors/extract_fc.js";
 import { extractFv } from "../../../motors/extract_fv.js";
+import { extractInscrip } from "../../../motors/extract_inscrip.js";
 
 export const runtime = "nodejs";
 
@@ -40,6 +41,7 @@ export async function POST(request) {
     let extraction = null;
     if (documentType === "FC") extraction = await extractFc(input);
     if (documentType === "FV") extraction = await extractFv(input);
+    if (documentType === "INSCRIP") extraction = await extractInscrip(input);
 
     return NextResponse.json({ ok: true, document_type: documentType, vin, file: uploaded, extraction });
   } catch (error) {
