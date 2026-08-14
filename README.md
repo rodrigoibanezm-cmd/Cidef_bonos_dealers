@@ -6,8 +6,6 @@ Sistema para digitalizar el ingreso documental de operaciones de dealers y sopor
 
 El foco actual es únicamente el proceso de ingreso documental.
 
-Flujo objetivo inicial:
-
 ```txt
 dealer autenticado
 → crea operación
@@ -18,56 +16,104 @@ dealer autenticado
 → operación queda disponible para revisión CIDEF
 ```
 
-La lógica de revisión, aprobación y pago del supervisor CIDEF se definirá después.
+## Tenancy
+
+Toda operación pertenece a un `tenant_id` dealer. El tenant se obtiene desde autenticación y no desde el documento ni desde un valor libre del frontend.
+
+Los usuarios CIDEF pertenecen al tenant CIDEF y acceden a tenants dealer según rol/permisos. Propiedad del dato y permisos de acceso son conceptos separados.
 
 ## Regla documental general
 
-Cada operación contempla hasta 5 documentos:
-
 ```txt
-FV      obligatorio
-FC      obligatorio
-INSCRIP obligatorio
-CARTA   opcional
-REPOS   opcional
+FV      obligatorio · contrato específico por dealer
+FC      obligatorio · contrato global CIDEF
+INSCRIP obligatorio · contrato global Registro Civil
+CARTA   opcional    · contrato global Forum
+REPOS   opcional    · contrato global CIDEF
 ```
-
-Significado:
 
 - `FV`: factura de venta del dealer al cliente final.
 - `FC`: factura de compra con la que el dealer compra el vehículo a CIDEF.
-- `INSCRIP`: solicitud/certificación de primera inscripción; hoy forma parte del protocolo y acredita la venta real.
-- `CARTA`: certificación Forum; aplica cuando la operación usa financiamiento Forum.
-- `REPOS`: documento de reposición solicitado por el dealer; no siempre existe.
+- `INSCRIP`: parte del protocolo; se conserva y solo se valida que corresponda al VIN de la operación.
+- `CARTA`: certificación Forum; su presencia acredita financiamiento Forum.
+- `REPOS`: factura/documento de reposición; no siempre existe.
 
 ## Principio de extracción
 
-No duplicar información que ya existe en las BBDD de CIDEF.
+No duplicar información que ya existe en las BBDD de CIDEF. El VIN es la llave transversal principal.
 
-El documento aporta:
+El documento aporta evidencia original, identificadores de cruce y hechos que no estén disponibles internamente.
 
-1. evidencia original;
-2. identificadores necesarios para cruzar con sistemas internos;
-3. hechos que no estén disponibles en otras fuentes.
-
-El VIN es la llave transversal principal de la operación.
-
-Ejemplo inicial para `FV`:
+`FV` aporta como mínimo:
 
 ```txt
 vin
 folio_factura
 fecha_factura
 precio_venta_final
-financiado_forum (solo si aparece explícitamente)
+financiado_por
 archivo_original
 ```
 
-Los campos definitivos se irán cerrando por tipo documental y por dealer cuando corresponda.
+## Arquitectura de extracción
 
-## Dealer inicial
+Se adopta el patrón probado en CMS:
 
-Primer caso utilizado para modelar contratos documentales: Rosselot.
+```txt
+documento original
+→ motor por tipo documental
+→ prompt separado
+→ helper Gemini
+→ JSON cerrado
+→ validaciones deterministas posteriores
+```
+
+El LLM extrae; no aprueba, no calcula bonos y no decide reglas de negocio.
+
+Modelos alineados con CMS:
+
+```txt
+extracción base: gemini-3.1-flash-lite
+SDK: @google/genai 1.8.0
+```
+
+Variables:
+
+```txt
+GEMINI_API_KEY       obligatoria
+GEMINI_EXTRACT_MODEL opcional; default gemini-3.1-flash-lite
+```
+
+## Primer motor global
+
+`motors/extract_fc.js`
+
+Salida V1:
+
+```txt
+tenant_id
+document_type = FC
+contract_version
+file_id
+vin
+folio_factura_compra
+fecha_factura_compra
+precio_compra_total
+nota_venta
+readable
+parse_error
+```
+
+El prompt vive separado en `prompts/fc.js`. La llamada al modelo está encapsulada en `lib/gemini_client.js` y `lib/run_document_extraction.js`.
+
+## Almacenamiento
+
+Decisión de arquitectura:
+
+```txt
+Google Drive → documentos originales
+Neon        → operaciones, estado, metadatos, extracciones, validaciones y referencias Drive
+```
 
 ## Principios de diseño
 
@@ -77,24 +123,16 @@ no exigir digitación manual si el sistema puede extraerla
 solo rechazar carga cuando el documento sea materialmente ilegible
 archivo original inmutable
 datos estructurados separados del original
-extracción determinista cuando el formato sea conocido
+contratos versionados
 no construir maestros desde documentos si la información ya existe en CIDEF
 ```
 
 ## Gobierno del trabajo
 
-El trabajo se gobierna desde Trello con la jerarquía:
-
-```txt
-Objetivo → Pregunta → Tarea
-```
-
-Estado actual:
-
 ```txt
 OBJ-02 · Digitalizar ingreso de documentación de dealers para pago de bonos
 P-02.1 · ¿Cómo debe funcionar el ingreso de una operación de dealer?
-T-02.1.1 · Levantar contrato documental del primer dealer
+T-02.1.2 · Diseñar motor global extract_fc
 ```
 
 Trello mantiene el estado vivo. Esta repo documenta únicamente decisiones suficientemente cerradas.
