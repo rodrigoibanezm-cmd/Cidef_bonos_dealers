@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { uploadToDrive } from "../../../lib/google_drive.js";
 import { extractFc } from "../../../motors/extract_fc.js";
+import { extractFv } from "../../../motors/extract_fv.js";
 
 export const runtime = "nodejs";
 
@@ -29,16 +30,16 @@ export async function POST(request) {
     const generatedName = `${vin}_${documentType}_${timestamp}.${extension}`;
 
     const uploaded = await uploadToDrive({ buffer: bytes, name: generatedName, mimeType: file.type });
+    const input = {
+      tenantId: "dealer_demo",
+      fileId: uploaded.id,
+      expectedVin: vin,
+      file: { base64: bytes.toString("base64"), mimeType: file.type },
+    };
 
     let extraction = null;
-    if (documentType === "FC") {
-      extraction = await extractFc({
-        tenantId: "dealer_demo",
-        fileId: uploaded.id,
-        expectedVin: vin,
-        file: { base64: bytes.toString("base64"), mimeType: file.type },
-      });
-    }
+    if (documentType === "FC") extraction = await extractFc(input);
+    if (documentType === "FV") extraction = await extractFv(input);
 
     return NextResponse.json({ ok: true, document_type: documentType, vin, file: uploaded, extraction });
   } catch (error) {
