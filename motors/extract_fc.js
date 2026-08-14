@@ -30,7 +30,7 @@ function normalizeVin(value) {
   return String(value || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
 }
 
-export async function extractFc({ tenantId, fileId, expectedVin, file }) {
+export async function validateFcVin({ tenantId, fileId, expectedVin, file }) {
   if (!tenantId) throw new Error("tenantId is required");
   if (!fileId) throw new Error("fileId is required");
   if (!expectedVin) throw new Error("expectedVin is required");
@@ -41,31 +41,28 @@ export async function extractFc({ tenantId, fileId, expectedVin, file }) {
   const vinEsperado = normalizeVin(expectedVin);
   const vinMatch = Boolean(vinDocumento && vinEsperado && vinDocumento === vinEsperado);
 
-  if (!vinMatch) {
-    return {
-      tenant_id: tenantId,
-      document_type: "FC",
-      contract_version: CONTRACT_VERSION,
-      file_id: fileId,
-      expected_vin: vinEsperado,
-      vin_documento: vinDocumento || null,
-      vin_match: false,
-      readable: vinCheck.readable === true,
-      parse_error: vinCheck._parse_error === true,
-      status: vinDocumento ? "VIN_MISMATCH" : "VIN_UNREADABLE",
-    };
-  }
-
-  const extracted = await runDocumentExtraction({ prompt: FC_PROMPT_V1, schema: FC_SCHEMA_V1, file });
-
   return {
     tenant_id: tenantId,
     document_type: "FC",
     contract_version: CONTRACT_VERSION,
     file_id: fileId,
     expected_vin: vinEsperado,
-    vin_documento: vinDocumento,
-    vin_match: true,
+    vin_documento: vinDocumento || null,
+    vin_match: vinMatch,
+    readable: vinCheck.readable === true,
+    parse_error: vinCheck._parse_error === true,
+    status: vinMatch ? "OK" : vinDocumento ? "VIN_MISMATCH" : "VIN_UNREADABLE",
+  };
+}
+
+export async function extractFc({ tenantId, fileId, expectedVin, file }) {
+  const vinValidation = await validateFcVin({ tenantId, fileId, expectedVin, file });
+  if (!vinValidation.vin_match) return vinValidation;
+
+  const extracted = await runDocumentExtraction({ prompt: FC_PROMPT_V1, schema: FC_SCHEMA_V1, file });
+
+  return {
+    ...vinValidation,
     folio_factura_compra: extracted.folio_factura_compra ?? null,
     fecha_factura_compra: extracted.fecha_factura_compra ?? null,
     precio_compra_total: extracted.precio_compra_total ?? null,
