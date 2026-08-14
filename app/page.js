@@ -14,6 +14,32 @@ export default function Home() {
   const [vin, setVin] = useState("");
   const [files, setFiles] = useState({});
   const [message, setMessage] = useState("");
+  const [uploading, setUploading] = useState(false);
+
+  async function testFcUpload() {
+    const file = files.fc;
+    if (!file) return setMessage("Selecciona primero el FC.");
+
+    setUploading(true);
+    setMessage("Subiendo FC a Google Drive...");
+
+    try {
+      const body = new FormData();
+      body.append("file", file);
+      body.append("vin", vin.trim().toUpperCase());
+      body.append("document_type", "FC");
+
+      const response = await fetch("/api/upload", { method: "POST", body });
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.error || "Error de subida");
+
+      setMessage(`FC guardado en Drive. file_id: ${result.file.id}`);
+    } catch (error) {
+      setMessage(`Error Drive: ${error.message}`);
+    } finally {
+      setUploading(false);
+    }
+  }
 
   function submit(event) {
     event.preventDefault();
@@ -58,6 +84,9 @@ export default function Home() {
             ))}
           </div>
 
+          <button type="button" onClick={testFcUpload} disabled={uploading}>
+            {uploading ? "Subiendo..." : "Probar FC → Drive"}
+          </button>
           <button type="submit">Continuar</button>
           {message && <p className="message">{message}</p>}
         </form>
