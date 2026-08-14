@@ -3,6 +3,26 @@ import { FC_PROMPT_V1 } from "../prompts/fc.js";
 
 const CONTRACT_VERSION = "1";
 
+const FC_SCHEMA_V1 = {
+  type: "object",
+  properties: {
+    vin: { type: "string", nullable: true },
+    folio_factura_compra: { type: "string", nullable: true },
+    fecha_factura_compra: { type: "string", nullable: true },
+    precio_compra_total: { type: "integer", nullable: true },
+    nota_venta: { type: "string", nullable: true },
+    readable: { type: "boolean" },
+  },
+  required: [
+    "vin",
+    "folio_factura_compra",
+    "fecha_factura_compra",
+    "precio_compra_total",
+    "nota_venta",
+    "readable",
+  ],
+};
+
 export async function extractFc({ tenantId, fileId, file }) {
   if (!tenantId) throw new Error("tenantId is required");
   if (!fileId) throw new Error("fileId is required");
@@ -10,6 +30,7 @@ export async function extractFc({ tenantId, fileId, file }) {
 
   const extracted = await runDocumentExtraction({
     prompt: FC_PROMPT_V1,
+    schema: FC_SCHEMA_V1,
     file,
   });
 
