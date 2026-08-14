@@ -1,14 +1,15 @@
 import { runDocumentExtraction } from "../lib/run_document_extraction.js";
 import { INSCRIP_PROMPT_V1 } from "../prompts/inscrip.js";
 
-const CONTRACT_VERSION = "1";
+const CONTRACT_VERSION = "2";
 
 const INSCRIP_SCHEMA_V1 = {
   type: "object",
   properties: {
+    documento_valido: { type: "boolean" },
     vin_documento: { type: "string", nullable: true },
   },
-  required: ["vin_documento"],
+  required: ["documento_valido", "vin_documento"],
 };
 
 function normalizeVin(value) {
@@ -27,19 +28,21 @@ export async function extractInscrip({ tenantId, fileId, expectedVin, file }) {
     file,
   });
 
+  const documentoValido = extracted.documento_valido === true;
   const vinDocumento = normalizeVin(extracted.vin_documento);
   const vinEsperado = normalizeVin(expectedVin);
-  const vinMatch = Boolean(vinDocumento && vinEsperado && vinDocumento === vinEsperado);
+  const vinMatch = Boolean(documentoValido && vinDocumento && vinEsperado && vinDocumento === vinEsperado);
 
   return {
     tenant_id: tenantId,
     document_type: "INSCRIP",
     contract_version: CONTRACT_VERSION,
     file_id: fileId,
+    documento_valido: documentoValido,
     expected_vin: vinEsperado,
     vin_documento: vinDocumento || null,
     vin_match: vinMatch,
     parse_error: extracted._parse_error === true,
-    status: vinMatch ? "OK" : vinDocumento ? "VIN_MISMATCH" : "VIN_UNREADABLE",
+    status: !documentoValido ? "INVALID_DOCUMENT" : vinMatch ? "OK" : vinDocumento ? "VIN_MISMATCH" : "VIN_UNREADABLE",
   };
 }
