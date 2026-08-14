@@ -16,19 +16,20 @@ export default function Home() {
   const [message, setMessage] = useState("");
   const [uploading, setUploading] = useState(false);
 
-  async function testFcUpload() {
-    const file = files.fc;
-    if (!file) return setMessage("Selecciona primero el FC.");
+  async function testDocument(type) {
+    const key = type.toLowerCase();
+    const file = files[key];
+    if (!file) return setMessage(`Selecciona primero el ${type}.`);
     if (!vin.trim()) return setMessage("Falta VIN.");
 
     setUploading(true);
-    setMessage("Subiendo, validando VIN y extrayendo FC...");
+    setMessage(`Subiendo, validando VIN y extrayendo ${type}...`);
 
     try {
       const body = new FormData();
       body.append("file", file);
       body.append("vin", vin.trim().toUpperCase());
-      body.append("document_type", "FC");
+      body.append("document_type", type);
 
       const response = await fetch("/api/upload", { method: "POST", body });
       const result = await response.json();
@@ -39,9 +40,13 @@ export default function Home() {
         return setMessage(`${x?.status || "ERROR"} · VIN documento: ${x?.vin_documento || "no leído"}`);
       }
 
-      setMessage(
-        `OK · VIN ${x.vin_documento} · Folio ${x.folio_factura_compra ?? "null"} · Fecha ${x.fecha_factura_compra ?? "null"} · Total ${x.precio_compra_total ?? "null"} · Nota venta ${x.nota_venta ?? "null"}`
-      );
+      if (type === "FC") {
+        return setMessage(`OK · VIN ${x.vin_documento} · Folio ${x.folio_factura_compra ?? "null"} · Fecha ${x.fecha_factura_compra ?? "null"} · Total ${x.precio_compra_total ?? "null"} · Nota venta ${x.nota_venta ?? "null"}`);
+      }
+
+      if (type === "FV") {
+        return setMessage(`OK · VIN ${x.vin_documento} · Folio ${x.folio_factura_venta ?? "null"} · Fecha ${x.fecha_factura_venta ?? "null"} · Total ${x.precio_venta_total ?? "null"} · Forum ${x.financiado_forum ?? "null"}`);
+      }
     } catch (error) {
       setMessage(`Error: ${error.message}`);
     } finally {
@@ -67,12 +72,7 @@ export default function Home() {
         <form onSubmit={submit}>
           <label className="field">
             <span>VIN</span>
-            <input
-              value={vin}
-              onChange={(e) => setVin(e.target.value.toUpperCase())}
-              placeholder="Ej. LVAV2MAB5TU475588"
-              autoComplete="off"
-            />
+            <input value={vin} onChange={(e) => setVin(e.target.value.toUpperCase())} placeholder="Ej. LVAV2MAB5TU475588" autoComplete="off" />
           </label>
 
           <div className="docs">
@@ -82,19 +82,14 @@ export default function Home() {
                   <strong>{doc.label}</strong>
                   <small>{doc.required ? "Obligatorio" : "Opcional"}</small>
                 </div>
-                <input
-                  type="file"
-                  accept="application/pdf,image/*"
-                  onChange={(e) => setFiles((current) => ({ ...current, [doc.key]: e.target.files?.[0] || null }))}
-                />
+                <input type="file" accept="application/pdf,image/*" onChange={(e) => setFiles((current) => ({ ...current, [doc.key]: e.target.files?.[0] || null }))} />
                 <span className="fileName">{files[doc.key]?.name || "Seleccionar archivo"}</span>
               </label>
             ))}
           </div>
 
-          <button type="button" onClick={testFcUpload} disabled={uploading}>
-            {uploading ? "Procesando..." : "Probar FC → Drive + extracción"}
-          </button>
+          <button type="button" onClick={() => testDocument("FC")} disabled={uploading}>Probar FC</button>
+          <button type="button" onClick={() => testDocument("FV")} disabled={uploading}>Probar FV</button>
           <button type="submit">Continuar</button>
           {message && <p className="message">{message}</p>}
         </form>
