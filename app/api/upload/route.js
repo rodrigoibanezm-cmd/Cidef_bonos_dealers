@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { uploadToDrive } from "../../../lib/google_drive.js";
-import { validateFcVin } from "../../../motors/extract_fc.js";
+import { extractFc } from "../../../motors/extract_fc.js";
 
 export const runtime = "nodejs";
 
@@ -30,9 +30,9 @@ export async function POST(request) {
 
     const uploaded = await uploadToDrive({ buffer: bytes, name: generatedName, mimeType: file.type });
 
-    let validation = null;
+    let extraction = null;
     if (documentType === "FC") {
-      validation = await validateFcVin({
+      extraction = await extractFc({
         tenantId: "dealer_demo",
         fileId: uploaded.id,
         expectedVin: vin,
@@ -40,11 +40,11 @@ export async function POST(request) {
       });
     }
 
-    return NextResponse.json({ ok: true, document_type: documentType, vin, file: uploaded, validation });
+    return NextResponse.json({ ok: true, document_type: documentType, vin, file: uploaded, extraction });
   } catch (error) {
-    console.error("Upload/validation failed", error);
+    console.error("Upload/extraction failed", error);
     return NextResponse.json(
-      { ok: false, error: error?.message || "Upload/validation failed" },
+      { ok: false, error: error?.message || "Upload/extraction failed" },
       { status: 500 }
     );
   }
