@@ -2,7 +2,7 @@ import { runDocumentExtraction } from "../lib/run_document_extraction.js";
 import { FV_PROMPT_V1 } from "../prompts/fv.js";
 import { FV_VIN_PROMPT_V1 } from "../prompts/fv_vin.js";
 
-const CONTRACT_VERSION = "1";
+const CONTRACT_VERSION = "2";
 
 const FV_VIN_SCHEMA_V1 = {
   type: "object",
@@ -19,12 +19,19 @@ const FV_SCHEMA_V1 = {
     fecha_factura_venta: { type: "string", nullable: true },
     precio_venta_total: { type: "integer", nullable: true },
     financiado_forum: { type: "boolean", nullable: true },
+    rut_cliente: { type: "string", nullable: true },
   },
-  required: ["folio_factura_venta", "fecha_factura_venta", "precio_venta_total", "financiado_forum"],
+  required: ["folio_factura_venta", "fecha_factura_venta", "precio_venta_total", "financiado_forum", "rut_cliente"],
 };
 
 function normalizeVin(value) {
   return String(value || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+}
+
+function normalizeRut(value) {
+  const cleaned = String(value || "").toUpperCase().replace(/[^0-9K]/g, "");
+  if (cleaned.length < 2) return null;
+  return `${cleaned.slice(0, -1)}-${cleaned.slice(-1)}`;
 }
 
 export async function validateFvVin({ tenantId, fileId, expectedVin, file }) {
@@ -72,6 +79,7 @@ export async function extractFv({ tenantId, fileId, expectedVin, file }) {
     fecha_factura_venta: extracted.fecha_factura_venta ?? null,
     precio_venta_total: extracted.precio_venta_total ?? null,
     financiado_forum: extracted.financiado_forum ?? null,
+    rut_cliente: normalizeRut(extracted.rut_cliente),
     parse_error: extracted._parse_error === true,
     status: "OK",
   };
