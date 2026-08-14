@@ -22,7 +22,7 @@ export default function Home() {
     if (!vin.trim()) return setMessage("Falta VIN.");
 
     setUploading(true);
-    setMessage("Subiendo y validando VIN...");
+    setMessage("Subiendo, validando VIN y extrayendo FC...");
 
     try {
       const body = new FormData();
@@ -34,12 +34,14 @@ export default function Home() {
       const result = await response.json();
       if (!response.ok || !result.ok) throw new Error(result.error || "Error de subida");
 
-      const validation = result.validation;
-      if (validation?.vin_match) {
-        setMessage(`OK · VIN coincide: ${validation.vin_documento}`);
-      } else {
-        setMessage(`${validation?.status || "ERROR"} · VIN documento: ${validation?.vin_documento || "no leído"}`);
+      const x = result.extraction;
+      if (!x?.vin_match) {
+        return setMessage(`${x?.status || "ERROR"} · VIN documento: ${x?.vin_documento || "no leído"}`);
       }
+
+      setMessage(
+        `OK · VIN ${x.vin_documento} · Folio ${x.folio_factura_compra ?? "null"} · Fecha ${x.fecha_factura_compra ?? "null"} · Total ${x.precio_compra_total ?? "null"} · Nota venta ${x.nota_venta ?? "null"}`
+      );
     } catch (error) {
       setMessage(`Error: ${error.message}`);
     } finally {
@@ -91,7 +93,7 @@ export default function Home() {
           </div>
 
           <button type="button" onClick={testFcUpload} disabled={uploading}>
-            {uploading ? "Validando..." : "Probar FC → Drive + VIN"}
+            {uploading ? "Procesando..." : "Probar FC → Drive + extracción"}
           </button>
           <button type="submit">Continuar</button>
           {message && <p className="message">{message}</p>}
