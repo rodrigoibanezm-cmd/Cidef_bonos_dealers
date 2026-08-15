@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { uploadToDrive } from "../../../lib/google_drive.js";
-import { createBonusRequest, saveBonusDocument, updateRequestFromExtraction } from "../../../lib/bonus_requests.js";
+import { createBonusRequest, findDraftRequestByVin, saveBonusDocument, updateRequestFromExtraction } from "../../../lib/bonus_requests.js";
 import { extractFc } from "../../../motors/extract_fc.js";
 import { extractFv } from "../../../motors/extract_fv.js";
 import { extractInscrip } from "../../../motors/extract_inscrip.js";
@@ -63,9 +63,14 @@ export async function POST(request) {
     const valid = extractionIsValid(documentType, extraction);
 
     if (valid && documentType !== "REPOS") {
+      if (!requestId && documentType !== "FC") {
+        const draft = await findDraftRequestByVin({ tenantId, vin });
+        requestId = draft?.id || null;
+      }
+
       if (!requestId) {
         if (documentType !== "FC") {
-          return NextResponse.json({ ok: false, error: "request_id is required after FC" }, { status: 400 });
+          return NextResponse.json({ ok: false, error: "No se encontró la solicitud abierta para este VIN" }, { status: 400 });
         }
         const created = await createBonusRequest({ tenantId, vin });
         requestId = created.id;
