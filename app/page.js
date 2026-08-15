@@ -11,6 +11,7 @@ const BASE_STEPS = [
 export default function Home() {
   const [vin, setVin] = useState("");
   const [vinLocked, setVinLocked] = useState(false);
+  const [requestId, setRequestId] = useState("");
   const [files, setFiles] = useState({});
   const [status, setStatus] = useState({});
   const [results, setResults] = useState({});
@@ -36,6 +37,7 @@ export default function Home() {
 
   function resetOperation() {
     setVinLocked(false);
+    setRequestId("");
     setFiles({});
     setStatus({});
     setResults({});
@@ -86,12 +88,14 @@ export default function Home() {
       body.append("file", file);
       body.append("vin", vin.trim().toUpperCase());
       body.append("document_type", step.type);
+      if (requestId) body.append("request_id", requestId);
       if (step.type === "CARTA") body.append("expected_rut", fvRut);
 
       const response = await fetch("/api/upload", { method: "POST", body });
       const result = await response.json();
       if (!response.ok || !result.ok) throw new Error(result.error || "Error al cargar el documento");
 
+      if (result.request_id && !requestId) setRequestId(result.request_id);
       const x = result.extraction;
 
       if (step.type === "REPOS") {
@@ -109,14 +113,13 @@ export default function Home() {
       }
 
       if (step.type === "FV") {
-        const requiresForum = x.financiado_forum === true;
-        setForumRequired(requiresForum);
+        setForumRequired(x.financiado_forum === true);
         setFvRut(x.rut_cliente || "");
       }
 
       setStatus((current) => ({ ...current, [step.key]: "ok" }));
       setResults((current) => ({ ...current, [step.key]: { ...x, summary: resultMessage(step.type, x) } }));
-      setMessage(`${step.label} validada correctamente.`);
+      setMessage(`${step.label} validada y guardada.`);
     } catch (error) {
       setStatus((current) => ({ ...current, [step.key]: "error" }));
       setMessage(`Error: ${error.message}`);
@@ -130,9 +133,24 @@ export default function Home() {
     setMessage("Reposición omitida. Operación lista para enviar.");
   }
 
-  function submit() {
-    if (!finished) return;
-    setMessage("Operación validada y lista para ingresar al sistema.");
+  async function submit() {
+    if (!finished || !requestId || uploading) return;
+    setUploading(true);
+    setMessage("Enviando operación...");
+    try {
+      const response = await fetch("/api/requests/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ request_id: requestId }),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.error || "No fue posible enviar la operación");
+      setMessage("Operación ingresada correctamente para revisión.");
+    } catch (error) {
+      setMessage(`Error: ${error.message}`);
+    } finally {
+      setUploading(false);
+    }
   }
 
   return (
@@ -144,24 +162,13 @@ export default function Home() {
 
         <label className="field">
           <span>VIN</span>
-          <input
-            value={vin}
-            disabled={vinLocked}
-            onChange={(e) => setVin(e.target.value.toUpperCase())}
-            placeholder="Ej. LVAV2MAB5TU475588"
-            autoComplete="off"
-          />
+          <input value={vin} disabled={vinLocked} onChange={(e) => setVin(e.target.value.toUpperCase())} placeholder="Ej. LVAV2MAB5TU475588" autoComplete="off" />
         </label>
 
         <div className="progressRow">
           {steps.map((step, index) => {
             const state = step.key === "repos" && reposSkipped ? "skipped" : status[step.key] || (index === currentIndex ? "active" : "locked");
-            return (
-              <div className={`progressStep ${state}`} key={step.key}>
-                <span>{index + 1}</span>
-                <small>{step.type}</small>
-              </div>
-            );
+            return <div className={`progressStep ${state}`} key={step.key}><span>{index + 1}</span><small>{step.type}</small></div>;
           })}
         </div>
 
@@ -179,21 +186,12 @@ export default function Home() {
             <div className="stepNumber">Paso {currentIndex + 1} de {steps.length}</div>
             <h2>{currentStep.type} · {currentStep.label}</h2>
             <p>{currentStep.optional ? "Documento opcional." : "Este documento debe quedar validado para continuar."}</p>
-
             <label className="dropZone">
-              <input
-                type="file"
-                accept="application/pdf,image/*"
-                disabled={uploading}
-                onChange={(e) => processFile(currentStep, e.target.files?.[0] || null)}
-              />
+              <input type="file" accept="application/pdf,image/*" disabled={uploading} onChange={(e) => processFile(currentStep, e.target.files?.[0] || null)} />
               <strong>{uploading ? "Validando..." : status[currentStep.key] === "error" ? "Volver a subir documento" : "Seleccionar documento"}</strong>
               <small>{files[currentStep.key]?.name || "PDF"}</small>
             </label>
-
-            {currentStep.key === "repos" && !uploading && (
-              <button type="button" className="secondaryButton" onClick={skipRepos}>No hay reposición</button>
-            )}
+            {currentStep.key === "repos" && !uploading && <button type="button" className="secondaryButton" onClick={skipRepos}>No hay reposición</button>}
           </section>
         )}
 
@@ -201,12 +199,11 @@ export default function Home() {
           <section className="readyBox">
             <strong>✓ Todos los documentos requeridos están validados</strong>
             <p>La operación está lista para enviar a CIDEF.</p>
-            <button type="button" onClick={submit}>Enviar operación</button>
+            <button type="button" onClick={submit} disabled={uploading || !requestId}>{uploading ? "Enviando..." : "Enviar operación"}</button>
           </section>
         )}
 
         {message && <p className={`message ${currentStep && status[currentStep.key] === "error" ? "errorMessage" : ""}`}>{message}</p>}
-
         {vinLocked && <button type="button" className="resetButton" onClick={resetOperation} disabled={uploading}>Empezar de nuevo</button>}
       </section>
     </main>
