@@ -58,8 +58,10 @@ export default function Home() {
 
   function validationError(type, x) {
     if (type === "CARTA") {
+      if (x?.status === "OK") return null;
       if (x?.status === "INVALID_DOCUMENT") return "El archivo no corresponde a una CARTA DE APROBACIÓN de Forum.";
       if (x?.status === "RUT_MISMATCH") return `La carta corresponde a otro cliente. RUT detectado: ${x?.rut_documento || "no leído"}.`;
+      if (x?.status === "RUT_UNREADABLE") return "No fue posible leer el RUT del cliente en la carta Forum.";
       return `No fue posible validar la carta Forum (${x?.status || "ERROR"}).`;
     }
     if (type === "INSCRIP" && x?.status === "INVALID_DOCUMENT") {
