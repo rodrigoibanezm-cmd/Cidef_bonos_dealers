@@ -3,14 +3,16 @@
   color: #172033;
   display: grid;
   grid-template-columns: 230px minmax(0, 1fr);
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
   width: 100%;
 }
 
 .sidebar {
   background: #fff;
   border-right: 1px solid #e6eaef;
-  min-height: 100vh;
+  height: 100vh;
+  overflow-y: auto;
   padding: 26px 16px;
 }
 .brand { display: grid; gap: 3px; margin-bottom: 30px; padding: 0 10px; }
@@ -32,7 +34,13 @@
 .sidebar nav a small { color: #99a1af; font-size: 10px; }
 .sidebar nav .activeDealer { background: #eef4ff; color: #285fb5; font-weight: 700; }
 
-.content { max-width: 1560px; padding: 28px 32px 40px; width: 100%; }
+.content {
+  height: 100vh;
+  max-width: 1560px;
+  overflow-y: auto;
+  padding: 28px 32px 40px;
+  width: 100%;
+}
 .header { align-items: flex-end; display: flex; justify-content: space-between; margin-bottom: 18px; }
 .header h1 { font-size: 24px; letter-spacing: -.025em; margin: 5px 0 0; }
 .eyebrow { color: #7d8797; font-size: 10px; font-weight: 800; letter-spacing: .08em; }
@@ -94,11 +102,11 @@
 .footer { color: #8a93a1; font-size: 11px; padding: 10px 4px; }
 
 @media (max-width: 900px) {
-  .screen { grid-template-columns: 1fr; }
-  .sidebar { border-bottom: 1px solid #e6eaef; border-right: 0; min-height: auto; }
+  .screen { grid-template-columns: 1fr; height: auto; overflow: visible; }
+  .sidebar { border-bottom: 1px solid #e6eaef; border-right: 0; height: auto; overflow: visible; }
   .sidebar nav { display: flex; overflow-x: auto; }
   .sidebar nav a { min-width: max-content; }
-  .content { padding: 18px 14px 30px; }
+  .content { height: auto; overflow: visible; padding: 18px 14px 30px; }
 }
 
 @media (max-width: 760px) {
