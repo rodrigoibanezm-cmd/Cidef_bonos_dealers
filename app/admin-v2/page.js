@@ -1,4 +1,9 @@
-import { getApprovalQueueKpis, listApprovedBonusRequestsByDealer, listDealers, listPendingBonusRequests } from "../../lib/approval_queue.js";
+import {
+  getApprovalQueueKpis,
+  listApprovedBonusRequestsByDealer,
+  listDealers,
+  listPendingBonusRequests,
+} from "../../lib/approval_queue.js";
 import styles from "./adminV2.module.css";
 
 export const dynamic = "force-dynamic";
