@@ -13,7 +13,10 @@
 .grid { display: grid; gap: 14px; grid-template-columns: minmax(0, 1.25fr) minmax(360px, .75fr); margin: 0 auto; max-width: 1500px; }
 .visualPanel, .dataPanel { background: #fff; border: 1px solid #e1e6ec; border-radius: 14px; overflow: hidden; }
 .panelTitle { background: #fafbfc; border-bottom: 1px solid #e8ecf0; color: #596579; font-size: 11px; font-weight: 800; letter-spacing: .05em; padding: 12px 14px; text-transform: uppercase; }
-.viewer { border: 0; display: block; height: calc(100vh - 205px); min-height: 620px; width: 100%; }
+.imageStage { align-items: flex-start; background: #eef1f4; display: flex; height: calc(100vh - 245px); justify-content: center; min-height: 620px; overflow: auto; padding: 18px; }
+.reviewImage { background: #fff; box-shadow: 0 3px 16px rgba(23,32,51,.12); display: block; height: auto; max-width: 100%; object-fit: contain; }
+.originalAction { border-top: 1px solid #e8ecf0; padding: 10px 14px; text-align: right; }
+.originalAction a { color: #285fb5; font-size: 12px; font-weight: 700; text-decoration: none; }
 .noFile, .noFields { color: #7c8697; font-size: 13px; padding: 28px; }
 .dataPanel { display: flex; flex-direction: column; min-height: 620px; }
 .fields { flex: 1; }
@@ -25,6 +28,8 @@
 .editButton, .okButton { border: 0; border-radius: 8px; cursor: pointer; font-size: 11px; font-weight: 800; padding: 8px 10px; }
 .editButton { background: #eef4ff; color: #285fb5; }
 .okButton { background: #eaf7ef; color: #25834b; }
+.auditorLabel { display: grid; font-size: 12px; font-weight: 700; gap: 6px; margin: 16px 16px 0; }
+.auditorLabel select { border: 1px solid #cfd7e1; border-radius: 8px; font: inherit; padding: 9px 10px; }
 .approve { background: #1769c2; border: 0; border-radius: 10px; color: #fff; cursor: pointer; font-size: 13px; font-weight: 800; margin: 16px; padding: 13px 15px; }
 .approve:disabled { cursor: not-allowed; opacity: .45; }
 .warning, .error { font-size: 12px; margin: 12px 16px 0; }
@@ -32,4 +37,4 @@
 .error { color: #b42318; }
 .complete { background: #fff; border: 1px solid #e1e6ec; border-radius: 14px; display: grid; gap: 6px; margin: 0 auto; max-width: 1500px; padding: 30px; }
 .complete span { color: #7c8697; font-size: 13px; }
-@media (max-width: 900px) { .screen { padding: 18px 14px 30px; } .grid { grid-template-columns: 1fr; } .viewer { height: 70vh; min-height: 520px; } .dataPanel { min-height: auto; } }
+@media (max-width: 900px) { .screen { padding: 18px 14px 30px; } .grid { grid-template-columns: 1fr; } .imageStage { height: 70vh; min-height: 520px; } .dataPanel { min-height: auto; } }
