@@ -50,7 +50,7 @@ export async function refreshSupervisorDealerAnalytics() {
         dealer_rut,
         trim(vin_chasis) as vin,
         marca,
-        modelo,
+        desc_abrev as modelo,
         vendedor,
         case
           when trim(fecha_factura) ~ '^\\d{4}-\\d{2}-\\d{2}$' then trim(fecha_factura)::date
