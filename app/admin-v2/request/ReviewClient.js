@@ -3,10 +3,20 @@
 import { useMemo, useState } from "react";
 import styles from "./review.module.css";
 
-function displayValue(value) {
+const DATE_FIELDS = new Set(["fecha_factura_compra", "fecha_factura_venta"]);
+
+function formatDate(value) {
+  const raw = String(value || "").trim();
+  const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return raw || "-";
+  return `${match[3]}-${match[2]}-${match[1]}`;
+}
+
+function displayValue(key, value) {
   if (value === true) return "Sí";
   if (value === false) return "No";
   if (value === null || value === undefined || value === "") return "-";
+  if (DATE_FIELDS.has(key)) return formatDate(value);
   return String(value);
 }
 
@@ -42,7 +52,7 @@ export default function ReviewClient({ requestId, document, fields, step, total,
       </div>
       <div className={styles.dataPanel}>
         <div className={styles.panelTitle}>Datos extraídos</div>
-        <div className={styles.fields}>{editableFields.length ? editableFields.map(([key, label]) => { const isEditing = Boolean(editing[key]); return <div className={styles.fieldRow} key={key}><div className={styles.fieldText}><small>{label}</small>{isEditing ? <input value={values[key] ?? ""} onChange={(e) => setValues((current) => ({ ...current, [key]: e.target.value }))} /> : <strong>{displayValue(values[key])}</strong>}</div><button type="button" className={isEditing ? styles.okButton : styles.editButton} onClick={() => setEditing((current) => ({ ...current, [key]: !isEditing }))}>{isEditing ? "OK" : "Editar"}</button></div>; }) : <div className={styles.noFields}>Este documento no aporta campos editables. Se valida visualmente completo.</div>}</div>
+        <div className={styles.fields}>{editableFields.length ? editableFields.map(([key, label]) => { const isEditing = Boolean(editing[key]); return <div className={styles.fieldRow} key={key}><div className={styles.fieldText}><small>{label}</small>{isEditing ? <input value={values[key] ?? ""} onChange={(e) => setValues((current) => ({ ...current, [key]: e.target.value }))} /> : <strong>{displayValue(key, values[key])}</strong>}</div><button type="button" className={isEditing ? styles.okButton : styles.editButton} onClick={() => setEditing((current) => ({ ...current, [key]: !isEditing }))}>{isEditing ? "OK" : "Editar"}</button></div>; }) : <div className={styles.noFields}>Este documento no aporta campos editables. Se valida visualmente completo.</div>}</div>
         <label className={styles.auditorLabel}>Auditor<select value={auditorId} onChange={(e) => setAuditorId(e.target.value)}><option value="">Seleccionar auditor</option>{auditors.map((auditor) => <option key={auditor.id} value={auditor.id}>{auditor.name}</option>)}</select></label>
         {!auditors.length ? <p className={styles.warning}>No hay auditores activos configurados.</p> : null}
         {message ? <p className={styles.error}>{message}</p> : null}
