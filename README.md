@@ -1,10 +1,8 @@
 # CIDEF Bonos Dealers
 
-Sistema para digitalizar el ingreso documental de operaciones de dealers y soportar posteriormente la revisión y pago de bonos CIDEF / Forum.
+Sistema para digitalizar el ingreso documental de operaciones de dealers y soportar la revisión y pago de bonos CIDEF / Forum.
 
-## Alcance actual
-
-El foco actual es únicamente el proceso de ingreso documental.
+## Flujo actual
 
 ```txt
 dealer autenticado
@@ -13,7 +11,11 @@ dealer autenticado
 → sistema guarda originales
 → extrae únicamente hechos que no existan ya en las BBDD CIDEF
 → dealer revisa/corrige visualmente si corresponde
-→ operación queda disponible para revisión CIDEF
+→ operación queda INGRESADA para revisión CIDEF
+→ supervisor revisa cada PDF secuencialmente
+→ cada PDF aprobado queda firmado por usuario + tenant supervisor
+→ al aprobar todos los PDF requeridos, la solicitud queda APROBADA
+→ pago posterior
 ```
 
 ## Tenancy
@@ -22,14 +24,16 @@ Toda operación pertenece a un `tenant_id` dealer. El tenant se obtiene desde au
 
 Los usuarios CIDEF pertenecen al tenant CIDEF y acceden a tenants dealer según rol/permisos. Propiedad del dato y permisos de acceso son conceptos separados.
 
+Todos los supervisores autorizados pueden ver la cola completa. La aprobación se firma con el usuario concreto y su tenant; no basta identificar solamente el tenant supervisor.
+
 ## Regla documental general
 
 ```txt
 FV      obligatorio · contrato específico por dealer
 FC      obligatorio · contrato global CIDEF
 INSCRIP obligatorio · contrato global Registro Civil
-CARTA   opcional    · contrato global Forum
-REPOS   opcional    · contrato global CIDEF
+CARTA   condicional · requerida cuando corresponde Forum
+REPOS   opcional    · se revisa si existe
 ```
 
 - `FV`: factura de venta del dealer al cliente final.
@@ -84,27 +88,57 @@ GEMINI_API_KEY       obligatoria
 GEMINI_EXTRACT_MODEL opcional; default gemini-3.5-flash-lite
 ```
 
-## Primer motor global
+## Revisión CIDEF
 
-`motors/extract_fc.js`
+La solicitud canónica sigue siendo `bonus_requests`; no se crea una segunda tabla para la cola administrativa.
 
-Salida V1:
+Cada PDF vive en `bonus_request_documents` y se aprueba completo, uno por uno, en orden:
 
 ```txt
-tenant_id
-document_type = FC
-contract_version
-file_id
-vin
-folio_factura_compra
-fecha_factura_compra
-precio_compra_total
-nota_venta
-readable
-parse_error
+FC → FV → INSCRIP → CARTA si aplica → REPOS si existe
 ```
 
-El schema de salida pertenece al motor. El prompt vive separado en `prompts/fc.js`. La llamada al modelo está encapsulada en `lib/gemini_client.js` y `lib/run_document_extraction.js`.
+Cada documento guarda:
+
+```txt
+review_status
+reviewed_by_user_id
+reviewed_by_tenant_id
+reviewed_at
+reviewed_extraction
+```
+
+`reviewed_extraction` conserva el resultado final validado por el supervisor, incluyendo correcciones realizadas durante la revisión.
+
+La solicitud guarda la firma final:
+
+```txt
+approved_by_user_id
+approved_by_tenant_id
+approved_at
+```
+
+`bonus_request_events` mantiene la bitácora de acciones por solicitud/documento.
+
+Migración: `db/001_supervisor_approval.sql`.
+
+Lecturas de cola/KPIs: `lib/approval_queue.js`.
+
+Flujo secuencial de aprobación: `lib/approval_workflow.js`.
+
+## Vista central administrativa
+
+La vista central se modela como cola operacional estilo CMS:
+
+```txt
+KPIs: total mes · total año · pendientes · urgentes
+cola: VIN · marca/modelo · dealer · fecha ingreso · días · estado · abrir
+sidebar: dealers → histórico de solicitudes aprobadas del dealer seleccionado
+```
+
+`total mes` y `total año` cuentan solicitudes aprobadas. La cola muestra únicamente `INGRESADA`. La regla de urgencia se entrega como parámetro y no queda hardcodeada en la consulta.
+
+Marca/modelo no se duplican en `bonus_requests`: deben resolverse por VIN desde las BBDD canónicas CIDEF al construir el read model final.
 
 ## Almacenamiento
 
@@ -123,6 +157,8 @@ archivo original inmutable
 datos estructurados separados del original
 contratos versionados
 no construir maestros desde documentos si la información ya existe en CIDEF
+1 PDF = 1 aprobación humana
+firma explícita de usuario + tenant en toda aprobación
 ```
 
 ## Gobierno del trabajo
