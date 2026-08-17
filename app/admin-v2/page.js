@@ -38,8 +38,11 @@ function DealerMenu({ dealers, selectedDealer }) {
   return (
     <aside className={styles.sidebar}>
       <div className={styles.brand}><strong>CIDEF</strong><span>Bonos Dealers</span></div>
+      <a className={`${styles.activeQueue} ${!selectedDealer ? styles.activeDealer : ""}`} href="/admin-v2">
+        <span>Activos</span>
+      </a>
       <div className={styles.sideTitle}>Dealers</div>
-      <nav>
+      <nav className={styles.dealerList}>
         {dealers.map((dealer) => (
           <a
             className={selectedDealer === dealer.dealer ? styles.activeDealer : ""}
