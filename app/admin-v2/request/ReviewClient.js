@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import styles from "./review.module.css";
 
 const DATE_FIELDS = new Set(["fecha_factura_compra", "fecha_factura_venta"]);
+const MONEY_FIELDS = new Set(["precio_compra_total", "precio_venta_total"]);
 
 function formatDate(value) {
   const raw = String(value || "").trim();
@@ -12,11 +13,18 @@ function formatDate(value) {
   return `${match[3]}-${match[2]}-${match[1]}`;
 }
 
+function formatClp(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return String(value || "-");
+  return `$ ${Math.trunc(number).toLocaleString("es-CL")}`;
+}
+
 function displayValue(key, value) {
   if (value === true) return "Sí";
   if (value === false) return "No";
   if (value === null || value === undefined || value === "") return "-";
   if (DATE_FIELDS.has(key)) return formatDate(value);
+  if (MONEY_FIELDS.has(key)) return formatClp(value);
   return String(value);
 }
 
