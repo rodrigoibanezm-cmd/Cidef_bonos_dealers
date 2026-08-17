@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "../../../../lib/db.js";
-import { getDriveThumbnail } from "../../../../lib/google_drive.js";
+import { downloadDriveFile, getDriveThumbnail } from "../../../../lib/google_drive.js";
 
 export const runtime = "nodejs";
 
@@ -16,11 +16,23 @@ export async function GET(request) {
     const file = rows[0];
     if (!file?.file_id) return NextResponse.json({ ok: false, error: "Document not found" }, { status: 404 });
 
-    const image = await getDriveThumbnail(file.file_id);
-    return new NextResponse(image, { headers: {
-      "Content-Type": "image/jpeg",
-      "Cache-Control": "private, max-age=300",
-    }});
+    const original = await downloadDriveFile(file.file_id);
+    if (String(original.mimeType || "").startsWith("image/")) {
+      return new NextResponse(original.buffer, { headers: {
+        "Content-Type": original.mimeType,
+        "Cache-Control": "private, max-age=300",
+      }});
+    }
+
+    if (original.mimeType === "application/pdf") {
+      const image = await getDriveThumbnail(file.file_id);
+      return new NextResponse(image, { headers: {
+        "Content-Type": "image/jpeg",
+        "Cache-Control": "private, max-age=300",
+      }});
+    }
+
+    return NextResponse.json({ ok: false, error: "Unsupported document format" }, { status: 415 });
   } catch (error) {
     console.error("Document thumbnail failed", error);
     return NextResponse.json({ ok: false, error: error?.message || "Document thumbnail failed" }, { status: 500 });
