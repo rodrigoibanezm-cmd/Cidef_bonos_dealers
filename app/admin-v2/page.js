@@ -1,4 +1,4 @@
-import { getApprovalQueueKpis, listApprovedBonusRequestsByDealer, listDealersWithApprovedRequests, listPendingBonusRequests } from "../../lib/approval_queue.js";
+import { getApprovalQueueKpis, listApprovedBonusRequestsByDealer, listDealers, listPendingBonusRequests } from "../../lib/approval_queue.js";
 import styles from "./adminV2.module.css";
 
 export const dynamic = "force-dynamic";
@@ -37,12 +37,11 @@ function DealerMenu({ dealers, selectedDealer }) {
       <nav>
         {dealers.map((dealer) => (
           <a
-            className={selectedDealer === dealer.tenant_id ? styles.activeDealer : ""}
-            href={`/admin-v2?dealer=${encodeURIComponent(dealer.tenant_id)}`}
-            key={dealer.tenant_id}
+            className={selectedDealer === dealer.dealer ? styles.activeDealer : ""}
+            href={`/admin-v2?dealer=${encodeURIComponent(dealer.dealer)}`}
+            key={dealer.dealer}
           >
-            <span>{dealer.tenant_id}</span>
-            <small>{dealer.total_aprobadas}</small>
+            <span>{dealer.dealer}</span>
           </a>
         ))}
       </nav>
@@ -86,7 +85,7 @@ export default async function AdminV2Page({ searchParams }) {
   const selectedDealer = String(params?.dealer || "").trim();
   const [kpis, dealers, rows] = await Promise.all([
     getApprovalQueueKpis({ urgentDays: URGENT_DAYS }),
-    listDealersWithApprovedRequests(),
+    listDealers(),
     selectedDealer
       ? listApprovedBonusRequestsByDealer({ tenantId: selectedDealer })
       : listPendingBonusRequests({ urgentDays: URGENT_DAYS }),
