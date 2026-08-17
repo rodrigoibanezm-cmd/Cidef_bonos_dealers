@@ -38,7 +38,7 @@ export default function ReviewClient({ requestId, document, fields, step, total,
       <div className={styles.visualPanel}>
         <div className={styles.panelTitle}>Documento original</div>
         <div className={styles.imageStage}><img className={styles.reviewImage} src={previewUrl} alt={document.file_name || document.document_type} /></div>
-        <div className={styles.originalAction}><a href={originalUrl} target="_blank" rel="noreferrer">Abrir PDF original</a></div>
+        <div className={styles.originalAction}><a href={originalUrl} target="_blank" rel="noreferrer">Abrir original</a></div>
       </div>
       <div className={styles.dataPanel}>
         <div className={styles.panelTitle}>Datos extraídos</div>
