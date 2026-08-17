@@ -1,0 +1,72 @@
+import { getBonusRequestForReview } from "../../../lib/approval_workflow.js";
+import ReviewClient from "./ReviewClient.js";
+import styles from "./review.module.css";
+
+export const dynamic = "force-dynamic";
+
+const FIELD_MAP = {
+  FC: [
+    ["folio_factura_compra", "Folio factura compra"],
+    ["fecha_factura_compra", "Fecha factura compra"],
+    ["precio_compra_total", "Total factura compra"],
+    ["nota_venta", "Nota de venta"],
+  ],
+  FV: [
+    ["folio_factura_venta", "Folio factura venta"],
+    ["fecha_factura_venta", "Fecha factura venta"],
+    ["precio_venta_total", "Total factura venta"],
+    ["financiado_forum", "Financiado Forum"],
+    ["rut_cliente", "RUT cliente"],
+  ],
+  INSCRIP: [["vin_documento", "VIN inscripción"]],
+  CARTA: [["rut_documento", "RUT cliente"]],
+  REPOS: [],
+};
+
+export default async function RequestReviewPage({ searchParams }) {
+  const params = await searchParams;
+  const id = String(params?.id || "").trim();
+  const review = id ? await getBonusRequestForReview(id) : null;
+
+  if (!review) {
+    return <main className={styles.screen}><a className={styles.back} href="/admin-v2">← Volver</a><p>Solicitud no encontrada.</p></main>;
+  }
+
+  const current = review.documents.find((x) => x.document_type === review.next_document_type) || null;
+  const step = current ? review.sequence.indexOf(current.document_type) + 1 : review.sequence.length;
+  const canApprove = Boolean(process.env.SUPERVISOR_USER_ID && process.env.SUPERVISOR_TENANT_ID);
+
+  return (
+    <main className={styles.screen}>
+      <header className={styles.header}>
+        <a className={styles.back} href="/admin-v2">← Volver a activos</a>
+        <div className={styles.topbar}>
+          <div>
+            <span className={styles.eyebrow}>CIDEF · BONOS DEALERS</span>
+            <h1>Revisión · {review.request.vin}</h1>
+            <div className={styles.meta}>
+              <span>{review.request.tenant_id}</span>
+              <span>{review.request.estado}</span>
+              <span>{review.review_complete ? "Revisión completa" : `Documento ${step} de ${review.sequence.length}`}</span>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {review.review_complete ? (
+        <section className={styles.complete}><strong>Solicitud aprobada</strong><span>Todos los documentos requeridos fueron revisados.</span></section>
+      ) : current ? (
+        <ReviewClient
+          requestId={review.request.id}
+          document={current}
+          fields={FIELD_MAP[current.document_type] || []}
+          step={step}
+          total={review.sequence.length}
+          canApprove={canApprove}
+        />
+      ) : (
+        <section className={styles.complete}><strong>Falta un documento requerido</strong><span>No es posible continuar la revisión.</span></section>
+      )}
+    </main>
+  );
+}
