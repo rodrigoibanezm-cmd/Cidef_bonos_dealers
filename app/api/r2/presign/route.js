@@ -41,6 +41,9 @@ export async function POST(request) {
     const year = String(now.getUTCFullYear());
     const month = String(now.getUTCMonth() + 1).padStart(2, "0");
     const uploads = [];
+    const basePath = targetVin && targetDocumentType
+      ? [safeSegment(tenantId, "tenant"), year, month, "corrections", targetVin, targetDocumentType, batchId]
+      : [safeSegment(tenantId, "tenant"), year, month, "batches", batchId, "original"];
 
     for (let index = 0; index < files.length; index += 1) {
       const file = files[index] || {};
@@ -52,7 +55,7 @@ export async function POST(request) {
 
       const originalName = safeSegment(file.name, `archivo_${index + 1}`);
       const uniqueName = `${String(index + 1).padStart(4, "0")}_${randomUUID()}_${originalName}`;
-      const key = [safeSegment(tenantId, "tenant"), year, month, batchId, "original", uniqueName].join("/");
+      const key = [...basePath, uniqueName].join("/");
       const signed = await createPresignedUpload({ key, contentType });
 
       uploads.push({
