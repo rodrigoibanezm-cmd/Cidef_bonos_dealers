@@ -31,7 +31,6 @@ export async function GET() {
         r.created_at,
         r.submitted_at,
         r.approved_at,
-        r.monto_venta,
         r.financiado_forum,
         exists (
           select 1 from bonus_request_documents d
@@ -47,7 +46,7 @@ export async function GET() {
         ) as has_inscrip,
         exists (
           select 1 from bonus_request_documents d
-          where d.request_id = r.id and d.document_type = 'CARTA'
+          where d.request_id = r.id and d.document_type in ('CARTA', 'CARTA_FINANCIAMIENTO')
         ) as has_carta
       from bonus_requests r
       where r.tenant_id = ${tenantId}
@@ -66,7 +65,7 @@ export async function GET() {
         id: row.id,
         vin: row.vin,
         status: statusFor(row),
-        amount: row.monto_venta ?? null,
+        amount: null,
         days_sent: days,
         action,
       };
