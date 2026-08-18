@@ -126,6 +126,16 @@ export default function Home() {
           body: file,
         });
         if (!put.ok) throw new Error(`Falló la subida de ${file.name}`);
+
+        const normalizeResponse = await fetch("/api/r2/normalize", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ key: upload.key, content_type: upload.content_type }),
+        });
+        const normalized = await readJson(normalizeResponse);
+        if (!normalizeResponse.ok || !normalized.ok) {
+          throw new Error(normalized.error || `Falló la conversión de ${file.name}`);
+        }
       });
 
       await uploadWithLimit(tasks, MAX_PARALLEL_UPLOADS, (done, total) => setProgress({ done, total }));
@@ -135,7 +145,7 @@ export default function Home() {
       if (filesInputRef.current) filesInputRef.current.value = "";
       if (folderInputRef.current) folderInputRef.current.value = "";
       if (correctionInputRef.current) correctionInputRef.current.value = "";
-      setMessage(actionTarget ? `Documento enviado para ${actionTarget.vin}.` : `${selectedFiles.length} archivos enviados. Procesamiento iniciado.`);
+      setMessage(actionTarget ? `Documento procesado para ${actionTarget.vin}.` : `${selectedFiles.length} archivos convertidos a JPG.`);
       await refreshOperations();
     } catch (err) {
       setError(err.message || "Error al enviar los documentos");
@@ -187,7 +197,7 @@ export default function Home() {
 
         {files.length > 0 && (
           <button type="button" className="sendButton" disabled={uploading} onClick={submit}>
-            {uploading ? `Enviando ${progress.done}/${progress.total}` : "Enviar"}
+            {uploading ? `Procesando ${progress.done}/${progress.total}` : "Enviar"}
           </button>
         )}
 
