@@ -1,19 +1,19 @@
 {
   "name": "cidef-bonos-dealers",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
-  "type": "module",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start"
   },
   "dependencies": {
-    "@google/genai": "1.8.0",
-    "@neondatabase/serverless": "1.0.2",
-    "googleapis": "144.0.0",
-    "next": "16.2.1",
-    "react": "19.2.0",
-    "react-dom": "19.2.0"
+    "@googleapis/drive": "^9.0.0",
+    "@neondatabase/serverless": "^1.0.1",
+    "next": "^15.4.6",
+    "pdfjs-dist": "^5.4.54",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "sharp": "^0.34.3"
   }
 }
