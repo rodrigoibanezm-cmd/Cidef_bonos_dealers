@@ -37,7 +37,7 @@ export async function POST(request) {
 
     for (const page of pages) {
       const suffix = String(page.pageNumber).padStart(3, "0");
-      const pageKey = `${prefix}/${base}_p${suffix}.jpg`;
+      const pageKey = `${prefix}/${base}_${suffix}.jpg`;
       await putR2Object({ key: pageKey, buffer: page.buffer, contentType: "image/jpeg" });
       created.push({ page: page.pageNumber, key: pageKey });
     }
