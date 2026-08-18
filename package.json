@@ -10,11 +10,12 @@
   "dependencies": {
     "@google-cloud/vertexai": "^1.10.0",
     "@googleapis/drive": "^10.0.0",
+    "@napi-rs/canvas": "^0.1.80",
     "@neondatabase/serverless": "^1.0.1",
     "next": "^15.4.6",
-    "pdfjs-dist": "^5.4.54",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
-    "sharp": "^0.34.3"
+    "sharp": "^0.34.3",
+    "unpdf": "^1.2.2"
   }
 }
