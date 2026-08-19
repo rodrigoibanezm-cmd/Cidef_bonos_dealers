@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { classifyDocumentFromR2 } from "../../../lib/document_router.js";
 import { getR2Object } from "../../../lib/r2.js";
+import { persistInscripcionExtraction } from "../../../lib/persist_inscripcion_extraction.js";
 import { extractInscrip } from "../../../motors/extract_inscrip.js";
 
 export const runtime = "nodejs";
@@ -39,7 +40,10 @@ export async function POST(request) {
 
     console.log(`[INSCRIP_EXTRACT] archivo=${key} resultado=${JSON.stringify(extraction)}`);
 
-    return NextResponse.json({ ok: true, key, ...result, extraction });
+    const persisted = await persistInscripcionExtraction(extraction);
+    console.log(`[INSCRIP_DB] archivo=${key} id=${persisted?.id ?? "null"} vin=${persisted?.vin ?? "null"} solicitud=${persisted?.numero_solicitud ?? "null"} status=${persisted?.status ?? "null"}`);
+
+    return NextResponse.json({ ok: true, key, ...result, extraction, persisted });
   } catch (error) {
     console.error("[DOC_PIPELINE_ERROR]", error);
     return NextResponse.json({ ok: false, error: error?.message || "Document pipeline failed" }, { status: 500 });
