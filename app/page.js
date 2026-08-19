@@ -16,6 +16,10 @@ function statusLabel(status) {
   return "Procesando";
 }
 
+function fileKey(file) {
+  return `${file.name}:${file.size}:${file.lastModified}`;
+}
+
 async function readJson(response) {
   const text = await response.text();
   try {
@@ -56,6 +60,18 @@ export default function Home() {
   const [loadingOperations, setLoadingOperations] = useState(true);
   const [target, setTarget] = useState(null);
 
+  const previews = useMemo(() => files.map((file) => ({
+    key: fileKey(file),
+    file,
+    url: file.type.startsWith("image/") ? URL.createObjectURL(file) : null,
+  })), [files]);
+
+  useEffect(() => () => {
+    for (const preview of previews) {
+      if (preview.url) URL.revokeObjectURL(preview.url);
+    }
+  }, [previews]);
+
   const refreshOperations = useCallback(async () => {
     try {
       const response = await fetch("/api/dealer/operations", { cache: "no-store" });
@@ -85,9 +101,31 @@ export default function Home() {
     const valid = Array.from(selected || []).filter((file) =>
       ["application/pdf", "image/jpeg", "image/png", "image/webp"].includes(file.type),
     );
-    setFiles(valid);
+
+    setFiles((current) => {
+      const seen = new Set(current.map(fileKey));
+      const additions = valid.filter((file) => !seen.has(fileKey(file)));
+      return [...current, ...additions];
+    });
+
     setError("");
     setMessage("");
+    if (filesInputRef.current) filesInputRef.current.value = "";
+    if (folderInputRef.current) folderInputRef.current.value = "";
+  }
+
+  function removeFile(key) {
+    if (uploading) return;
+    setFiles((current) => current.filter((file) => fileKey(file) !== key));
+  }
+
+  function clearFiles() {
+    if (uploading) return;
+    setFiles([]);
+    setError("");
+    setMessage("");
+    if (filesInputRef.current) filesInputRef.current.value = "";
+    if (folderInputRef.current) folderInputRef.current.value = "";
   }
 
   function onDrop(event) {
@@ -203,7 +241,7 @@ export default function Home() {
           onDrop={onDrop}
         >
           <strong>{files.length ? `${files.length} archivos listos` : "Arrastra tus documentos aquí"}</strong>
-          <span>{files.length ? "Puedes enviarlos todos juntos" : "PDF, JPG, PNG o WEBP"}</span>
+          <span>{files.length ? "Puedes seguir agregando archivos antes de enviar" : "PDF, JPG, PNG o WEBP"}</span>
           <div className="pickerRow">
             <button type="button" className="pickerButton" disabled={uploading} onClick={() => filesInputRef.current?.click()}>Seleccionar archivos</button>
             <button type="button" className="pickerButton secondary" disabled={uploading} onClick={() => folderInputRef.current?.click()}>Seleccionar carpeta</button>
@@ -212,6 +250,26 @@ export default function Home() {
           <input ref={folderInputRef} className="hiddenInput" type="file" accept="application/pdf,image/jpeg,image/png,image/webp" multiple webkitdirectory="" directory="" onChange={(e) => chooseFiles(e.target.files)} />
           <input ref={correctionInputRef} className="hiddenInput" type="file" accept="application/pdf,image/jpeg,image/png,image/webp" multiple={false} onChange={correctionSelected} />
         </div>
+
+        {files.length > 0 && (
+          <div className="selectedFilesBlock">
+            <div className="selectedFilesHeader">
+              <strong>Archivos seleccionados</strong>
+              <button type="button" className="clearFilesButton" disabled={uploading} onClick={clearFiles}>Borrar todos</button>
+            </div>
+            <div className="fileGrid">
+              {previews.map(({ key, file, url }) => (
+                <div className="fileCard" key={key} title={file.name}>
+                  <button type="button" className="removeFileButton" aria-label={`Eliminar ${file.name}`} disabled={uploading} onClick={() => removeFile(key)}>×</button>
+                  <div className="fileThumb">
+                    {url ? <img src={url} alt="" /> : <div className="pdfThumb">PDF</div>}
+                    <div className="fileNameOverlay">{file.name}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {files.length > 0 && (
           <button type="button" className="sendButton" disabled={uploading} onClick={submit}>
