@@ -117,10 +117,8 @@ export default function Home() {
       const signed = await readJson(response);
       if (!response.ok || !signed.ok) throw new Error(signed.error || "No fue posible preparar la carga");
 
+      const generatedPages = [];
       const validUploads = signed.uploads.filter((item) => item.ok);
-      const firstUploadIndex = validUploads[0]?.index;
-      let firstPageKey = null;
-
       const tasks = validUploads.map((upload) => async () => {
         const file = selectedFiles[upload.index];
         const put = await fetch(upload.upload_url, {
@@ -140,22 +138,23 @@ export default function Home() {
           throw new Error(normalized.error || `Falló la conversión de ${file.name}`);
         }
 
-        if (upload.index === firstUploadIndex && normalized.pages?.[0]?.key) {
-          firstPageKey = normalized.pages[0].key;
+        for (const page of normalized.pages || []) {
+          if (page?.key) generatedPages.push(page.key);
         }
       });
 
       await uploadWithLimit(tasks, MAX_PARALLEL_UPLOADS, (done, total) => setProgress({ done, total }));
 
-      if (firstPageKey) {
+      generatedPages.sort();
+      for (const key of generatedPages) {
         const routerResponse = await fetch("/api/document-router", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ key: firstPageKey }),
+          body: JSON.stringify({ key }),
         });
         const routed = await readJson(routerResponse);
         if (!routerResponse.ok || !routed.ok) {
-          throw new Error(routed.error || "Falló la clasificación del primer JPG");
+          throw new Error(routed.error || `Falló la clasificación de ${key}`);
         }
       }
 
@@ -164,7 +163,7 @@ export default function Home() {
       if (filesInputRef.current) filesInputRef.current.value = "";
       if (folderInputRef.current) folderInputRef.current.value = "";
       if (correctionInputRef.current) correctionInputRef.current.value = "";
-      setMessage(actionTarget ? `Documento procesado para ${actionTarget.vin}.` : `${selectedFiles.length} archivos convertidos a JPG.`);
+      setMessage(actionTarget ? `Documento procesado para ${actionTarget.vin}.` : `${generatedPages.length} JPG clasificados.`);
       await refreshOperations();
     } catch (err) {
       setError(err.message || "Error al enviar los documentos");
