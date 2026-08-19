@@ -11,6 +11,17 @@ function tenantFromKey(key) {
   return String(key || "").split("/")[0] || "unknown";
 }
 
+function sourceFilenameFromKey(key) {
+  const leaf = String(key || "").split("/").pop() || "";
+  const match = leaf.match(/_src-([A-Za-z0-9_-]+)(?:_\d{3})?\.jpg$/i);
+  if (!match) return null;
+  try {
+    return Buffer.from(match[1], "base64url").toString("utf8") || null;
+  } catch {
+    return null;
+  }
+}
+
 export async function POST(request) {
   try {
     const body = await request.json();
@@ -37,10 +48,11 @@ export async function POST(request) {
         mimeType: object.contentType || "image/jpeg",
       },
     });
+    extraction.source_filename = sourceFilenameFromKey(key);
 
     const persisted = await persistFinanciamientoExtraction(extraction);
 
-    console.log(`[FINANCIAMIENTO_EXTRACT] archivo=${key} resultado=${JSON.stringify(extraction)}`);
+    console.log(`[FINANCIAMIENTO_EXTRACT] archivo=${key} source=${extraction.source_filename ?? "null"} resultado=${JSON.stringify(extraction)}`);
     console.log(`[FINANCIAMIENTO_DB] archivo=${key} id=${persisted?.id ?? "null"} status=${persisted?.status ?? "null"}`);
 
     return NextResponse.json({ ok: true, key, ...result, extraction, persisted });
