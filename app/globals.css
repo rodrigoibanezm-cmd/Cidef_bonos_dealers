@@ -26,9 +26,9 @@ h2 { margin: 0; font-size: 22px; }
 .selectedFilesHeader { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
 .selectedFilesHeader strong { font-size: 14px; }
 .clearFilesButton { border: 0; background: transparent; color: #8b2222; font-weight: 700; padding: 6px 0; }
-.fileGrid { display: grid; grid-template-columns: repeat(auto-fill, 68px); gap: 8px; justify-content: start; }
-.fileCard { position: relative; min-width: 0; width: 68px; }
-.fileThumb { position: relative; width: 68px; height: 55px; overflow: hidden; border: 1px solid #dfe3e7; border-radius: 8px; background: #f5f6f8; }
+.fileGrid { display: grid; grid-template-columns: repeat(auto-fill, 55px); gap: 8px; justify-content: start; }
+.fileCard { position: relative; min-width: 0; width: 55px; }
+.fileThumb { position: relative; width: 55px; height: 55px; overflow: hidden; border: 1px solid #dfe3e7; border-radius: 8px; background: #f5f6f8; }
 .fileThumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .pdfThumb { width: 100%; height: 100%; display: grid; place-items: center; font-size: 12px; font-weight: 800; letter-spacing: .05em; color: #8f3434; background: linear-gradient(145deg, #fff 0%, #f4f4f4 100%); }
 .fileNameOverlay { position: absolute; left: 0; right: 0; bottom: 0; padding: 11px 5px 4px; color: #fff; font-size: 8px; font-weight: 700; line-height: 1.15; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: linear-gradient(transparent, rgba(0,0,0,.78)); }
@@ -70,7 +70,7 @@ tbody tr:last-child td { border-bottom: 0; }
   .kpis { width: 100%; justify-content: space-between; gap: 10px; }
   .pickerRow { width: 100%; }
   .pickerButton { flex: 1; min-width: 150px; }
-  .fileGrid { grid-template-columns: repeat(auto-fill, 62px); }
-  .fileCard, .fileThumb { width: 62px; }
-  .fileThumb { height: 50px; }
+  .fileGrid { grid-template-columns: repeat(auto-fill, 55px); }
+  .fileCard, .fileThumb { width: 55px; }
+  .fileThumb { height: 55px; }
 }
