@@ -12,14 +12,11 @@
     "@aws-sdk/client-s3": "^3.864.0",
     "@aws-sdk/s3-request-presigner": "^3.864.0",
     "@google/genai": "1.8.0",
-    "@napi-rs/canvas": "^0.1.80",
     "@neondatabase/serverless": "1.0.2",
     "googleapis": "144.0.0",
     "next": "16.2.1",
-    "pdfjs-dist": "^5.4.54",
     "react": "19.2.0",
     "react-dom": "19.2.0",
-    "sharp": "^0.34.3",
-    "unpdf": "^1.2.2"
+    "sharp": "^0.34.3"
   }
 }
