@@ -118,6 +118,9 @@ export default function Home() {
       if (!response.ok || !signed.ok) throw new Error(signed.error || "No fue posible preparar la carga");
 
       const validUploads = signed.uploads.filter((item) => item.ok);
+      const firstUploadIndex = validUploads[0]?.index;
+      let firstPageKey = null;
+
       const tasks = validUploads.map((upload) => async () => {
         const file = selectedFiles[upload.index];
         const put = await fetch(upload.upload_url, {
@@ -136,9 +139,25 @@ export default function Home() {
         if (!normalizeResponse.ok || !normalized.ok) {
           throw new Error(normalized.error || `Falló la conversión de ${file.name}`);
         }
+
+        if (upload.index === firstUploadIndex && normalized.pages?.[0]?.key) {
+          firstPageKey = normalized.pages[0].key;
+        }
       });
 
       await uploadWithLimit(tasks, MAX_PARALLEL_UPLOADS, (done, total) => setProgress({ done, total }));
+
+      if (firstPageKey) {
+        const routerResponse = await fetch("/api/document-router", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ key: firstPageKey }),
+        });
+        const routed = await readJson(routerResponse);
+        if (!routerResponse.ok || !routed.ok) {
+          throw new Error(routed.error || "Falló la clasificación del primer JPG");
+        }
+      }
 
       setFiles([]);
       setTarget(null);
