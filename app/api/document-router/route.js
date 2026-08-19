@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { classifyDocumentFromR2 } from "../../../lib/document_router.js";
 import { getR2Object } from "../../../lib/r2.js";
-import { persistFvExtraction } from "../../../lib/persist_fv_extraction.js";
-import { extractFv } from "../../../motors/extract_fv.js";
+import { extractInscrip } from "../../../motors/extract_inscrip.js";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -23,13 +22,13 @@ export async function POST(request) {
     const result = await classifyDocumentFromR2(key);
     console.log(`[DOC_ROUTER] archivo=${key} tipo=${result.document_type} confidence=${result.confidence.toFixed(3)}`);
 
-    if (result.document_type !== "FV") {
-      console.log(`[DOC_EXTRACT_SKIP] archivo=${key} tipo=${result.document_type} motivo=ONLY_FV_ENABLED`);
+    if (result.document_type !== "INSCRIPCION") {
+      console.log(`[DOC_EXTRACT_SKIP] archivo=${key} tipo=${result.document_type} motivo=ONLY_INSCRIPCION_ENABLED`);
       return NextResponse.json({ ok: true, key, ...result, extraction: null });
     }
 
     const object = await getR2Object(key);
-    const extraction = await extractFv({
+    const extraction = await extractInscrip({
       tenantId: tenantFromKey(key),
       fileId: key,
       file: {
@@ -38,12 +37,9 @@ export async function POST(request) {
       },
     });
 
-    console.log(`[FV_EXTRACT] archivo=${key} resultado=${JSON.stringify(extraction)}`);
+    console.log(`[INSCRIP_EXTRACT] archivo=${key} resultado=${JSON.stringify(extraction)}`);
 
-    const persisted = await persistFvExtraction(extraction);
-    console.log(`[FV_DB] archivo=${key} id=${persisted?.id ?? "null"} vin=${persisted?.vin ?? "null"} status=${persisted?.status ?? "null"}`);
-
-    return NextResponse.json({ ok: true, key, ...result, extraction, persisted });
+    return NextResponse.json({ ok: true, key, ...result, extraction });
   } catch (error) {
     console.error("[DOC_PIPELINE_ERROR]", error);
     return NextResponse.json({ ok: false, error: error?.message || "Document pipeline failed" }, { status: 500 });
