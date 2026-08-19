@@ -26,10 +26,14 @@ PRINCIPIOS
 CAMPOS
 
 vin
-* Extrae el VIN/chasis del vehículo vendido.
-* Puede aparecer como VIN, Chasis, Chassis, N° Chasis o equivalente.
+* Extrae el identificador de chasis del vehículo vendido.
+* En estos documentos normalmente NO se llama literalmente VIN.
+* Busca prioritariamente las etiquetas "Chasis", "Chassis", "N° Chasis", "N° Chassis" o equivalentes.
+* El valor asociado a Chasis/Chassis ES el VIN para este flujo.
+* Puede aparecer también como VIN en algunos dealers.
 * Debe corresponder al vehículo de la operación de venta.
 * Devuelve mayúsculas, sin espacios ni separadores.
+* No confundas número de motor, patente, código interno, folio u otros identificadores con el chasis.
 
 nombre_cliente
 * Extrae el nombre o razón social del comprador/cliente final.
