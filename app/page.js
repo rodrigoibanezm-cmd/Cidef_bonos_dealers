@@ -127,7 +127,7 @@ export default function Home() {
         });
         if (!put.ok) throw new Error(`Falló la subida de ${file.name}`);
 
-        const normalizeResponse = await fetch("/api/r2/normalize", {
+        const normalizeResponse = await fetch("/api/r2_normalize", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ key: upload.key, content_type: upload.content_type }),
