@@ -20,6 +20,11 @@ function safeSegment(value, fallback = "file") {
   return clean || fallback;
 }
 
+function encodeSourceFilename(value, fallback) {
+  const exact = String(value || fallback || "archivo");
+  return Buffer.from(exact, "utf8").toString("base64url");
+}
+
 export async function POST(request) {
   try {
     const body = await request.json();
@@ -53,15 +58,17 @@ export async function POST(request) {
         continue;
       }
 
-      const originalName = safeSegment(file.name, `archivo_${index + 1}`);
-      const uniqueName = `${String(index + 1).padStart(4, "0")}_${randomUUID()}_${originalName}`;
+      const fallbackName = `archivo_${index + 1}`;
+      const exactName = String(file.name || fallbackName);
+      const encodedSourceName = encodeSourceFilename(exactName, fallbackName);
+      const uniqueName = `${String(index + 1).padStart(4, "0")}_${randomUUID()}_src-${encodedSourceName}`;
       const key = [...basePath, uniqueName].join("/");
       const signed = await createPresignedUpload({ key, contentType });
 
       uploads.push({
         index,
         ok: true,
-        name: file.name || originalName,
+        name: exactName,
         size: Number(file.size || 0),
         content_type: contentType,
         key: signed.key,
