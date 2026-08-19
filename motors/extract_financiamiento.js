@@ -1,13 +1,16 @@
 import { runDocumentExtraction } from "../lib/run_document_extraction.js";
 import { FINANCIAMIENTO_PROMPT_V1 } from "../prompts/financiamiento.js";
 
-const CONTRACT_VERSION = "1";
+const CONTRACT_VERSION = "2";
 
-const FINANCIAMIENTO_SCHEMA_V1 = {
+const FINANCIAMIENTO_SCHEMA_V2 = {
   type: "object",
   properties: {
     documento_valido: { type: "boolean" },
     vin: { type: "string", nullable: true },
+    marca: { type: "string", nullable: true },
+    modelo: { type: "string", nullable: true },
+    version: { type: "string", nullable: true },
     financiera: { type: "string", nullable: true },
     nombre_cliente: { type: "string", nullable: true },
     rut_cliente: { type: "string", nullable: true },
@@ -21,6 +24,9 @@ const FINANCIAMIENTO_SCHEMA_V1 = {
   required: [
     "documento_valido",
     "vin",
+    "marca",
+    "modelo",
+    "version",
     "financiera",
     "nombre_cliente",
     "rut_cliente",
@@ -44,7 +50,7 @@ export async function extractFinanciamiento({ tenantId, fileId, file }) {
 
   const extracted = await runDocumentExtraction({
     prompt: FINANCIAMIENTO_PROMPT_V1,
-    schema: FINANCIAMIENTO_SCHEMA_V1,
+    schema: FINANCIAMIENTO_SCHEMA_V2,
     file,
   });
 
@@ -58,6 +64,9 @@ export async function extractFinanciamiento({ tenantId, fileId, file }) {
     file_id: fileId,
     documento_valido: documentoValido,
     vin: vin || null,
+    marca: extracted.marca || null,
+    modelo: extracted.modelo || null,
+    version: extracted.version || null,
     financiera: extracted.financiera || null,
     nombre_cliente: extracted.nombre_cliente || null,
     rut_cliente: extracted.rut_cliente || null,
