@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { classifyDocumentFromR2 } from "../../../lib/document_router.js";
 import { getR2Object } from "../../../lib/r2.js";
+import { persistFvExtraction } from "../../../lib/persist_fv_extraction.js";
 import { extractFv } from "../../../motors/extract_fv.js";
 
 export const runtime = "nodejs";
@@ -22,8 +23,6 @@ export async function POST(request) {
     const result = await classifyDocumentFromR2(key);
     console.log(`[DOC_ROUTER] archivo=${key} tipo=${result.document_type} confidence=${result.confidence.toFixed(3)}`);
 
-    // Por ahora el pipeline queda bloqueado a un único extractor: FV.
-    // Las demás clases solo se clasifican y esperan su motor específico.
     if (result.document_type !== "FV") {
       console.log(`[DOC_EXTRACT_SKIP] archivo=${key} tipo=${result.document_type} motivo=ONLY_FV_ENABLED`);
       return NextResponse.json({ ok: true, key, ...result, extraction: null });
@@ -41,7 +40,10 @@ export async function POST(request) {
 
     console.log(`[FV_EXTRACT] archivo=${key} resultado=${JSON.stringify(extraction)}`);
 
-    return NextResponse.json({ ok: true, key, ...result, extraction });
+    const persisted = await persistFvExtraction(extraction);
+    console.log(`[FV_DB] archivo=${key} id=${persisted?.id ?? "null"} vin=${persisted?.vin ?? "null"} status=${persisted?.status ?? "null"}`);
+
+    return NextResponse.json({ ok: true, key, ...result, extraction, persisted });
   } catch (error) {
     console.error("[DOC_PIPELINE_ERROR]", error);
     return NextResponse.json({ ok: false, error: error?.message || "Document pipeline failed" }, { status: 500 });
