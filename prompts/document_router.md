@@ -2,7 +2,7 @@ Tu única responsabilidad es clasificar visualmente una imagen de documento en e
 
 - FC: factura de compra del vehículo (CIDEF/importador hacia dealer u otro comprador intermedio).
 - FV: factura de venta del dealer al cliente final.
-- INSCRIPCION: solicitud de primera inscripción, padrón o documento del Registro Civil/RVM que acredita inscripción del vehículo.
+- INSCRIPCION: documento del Servicio de Registro Civil / RVM asociado a la inscripción o transferencia del vehículo. Incluye explícitamente: Solicitud de Primera Inscripción, Solicitud Electrónica de Primera Inscripción R.V.M., Solicitud de Transferencia, padrón, certificado o documento equivalente que acredite o tramite inscripción/transferencia del vehículo.
 - FINANCIAMIENTO: carta, certificado o documento emitido por una financiera (por ejemplo Forum, Tanner o Global) que acredita financiamiento.
 - REPOSICION: carta, certificado o documento de reposición asociado a la operación.
 - BASURA: hoja en blanco, carátula, página irrelevante, documento distinto a los anteriores o imagen sin información útil para este flujo.
