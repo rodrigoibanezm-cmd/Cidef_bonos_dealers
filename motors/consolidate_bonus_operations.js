@@ -5,6 +5,7 @@ import { buildBonusOperationClosure } from "../lib/build_bonus_operation_closure
 import { loadBonusOperationDocuments } from "../lib/load_bonus_operation_documents.js";
 import { persistConsolidatedBonusRequest } from "../lib/persist_consolidated_bonus_request.js";
 import { persistOperationClosure } from "../lib/persist_operation_closure.js";
+import { syncBonusRequestDocuments } from "../lib/sync_bonus_request_documents.js";
 
 function normVin(value) {
   return String(value || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
@@ -53,6 +54,13 @@ async function consolidateOne({ sql, tenantId, vin }) {
     vin,
     documents: targeted.documents,
     closure: finalClosure,
+  });
+
+  await syncBonusRequestDocuments({
+    sql,
+    requestId: operation.id,
+    tenantId,
+    documents: targeted.documents,
   });
 
   return {
