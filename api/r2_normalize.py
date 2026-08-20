@@ -43,6 +43,11 @@ def _base_name(key: str) -> str:
     return PurePosixPath(key).stem
 
 
+def _is_canonical_page(key: str) -> bool:
+    path = f"/{key.strip('/')}"
+    return "/pages/" in path and key.lower().endswith((".jpg", ".jpeg"))
+
+
 def _image_to_jpeg(data: bytes) -> bytes:
     with Image.open(io.BytesIO(data)) as image:
         image = ImageOps.exif_transpose(image).convert("RGB")
@@ -100,6 +105,21 @@ class handler(BaseHTTPRequestHandler):
                 return
 
             s3, bucket = _r2_client()
+
+            # A JPG under /pages/ is already the canonical review artifact.
+            # Normalizing it again used to create /pages/pages/... and delete the
+            # canonical object, leaving Neon file_id references broken.
+            if _is_canonical_page(key):
+                s3.head_object(Bucket=bucket, Key=key)
+                self._json(200, {
+                    "ok": True,
+                    "source_deleted": False,
+                    "already_normalized": True,
+                    "pages_created": 1,
+                    "pages": [{"page": 1, "key": key}],
+                })
+                return
+
             response = s3.get_object(Bucket=bucket, Key=key)
             data = response["Body"].read()
             actual_content_type = content_type or response.get("ContentType") or "application/octet-stream"
@@ -114,6 +134,8 @@ class handler(BaseHTTPRequestHandler):
 
             for page_number, jpeg in pages:
                 page_key = f"{prefix}/{base}_{page_number:03d}.jpg"
+                if page_key == key:
+                    raise RuntimeError("Normalization cannot overwrite its source object")
                 s3.put_object(
                     Bucket=bucket,
                     Key=page_key,
@@ -126,6 +148,8 @@ class handler(BaseHTTPRequestHandler):
             if len(created) != len(pages):
                 raise RuntimeError("No se pudieron confirmar todas las páginas JPG")
 
+            # Delete only the uploaded source after every canonical JPG has been
+            # confirmed. Canonical /pages/ artifacts are never deleted here.
             s3.delete_object(Bucket=bucket, Key=key)
 
             self._json(
@@ -133,6 +157,7 @@ class handler(BaseHTTPRequestHandler):
                 {
                     "ok": True,
                     "source_deleted": True,
+                    "already_normalized": False,
                     "pages_created": len(created),
                     "pages": created,
                 },
