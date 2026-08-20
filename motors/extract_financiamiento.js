@@ -1,5 +1,10 @@
 import { runDocumentExtraction } from "../lib/run_document_extraction.js";
 import { FINANCIAMIENTO_PROMPT_V1 } from "../prompts/financiamiento.js";
+import {
+  EXTRACTION_MODE,
+  runTargetedDocumentExtraction,
+  targetedContract,
+} from "../lib/targeted_document_extraction.js";
 
 const CONTRACT_VERSION = "2";
 
@@ -43,10 +48,46 @@ function normalizeVin(value) {
   return String(value || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
 }
 
-export async function extractFinanciamiento({ tenantId, fileId, file }) {
+export async function extractFinanciamiento({
+  tenantId,
+  fileId,
+  file,
+  mode = EXTRACTION_MODE.FULL,
+  fields = null,
+  context = null,
+  reason = null,
+  attempt = null,
+}) {
   if (!tenantId) throw new Error("tenantId is required");
   if (!fileId) throw new Error("fileId is required");
   if (!file?.base64 || !file?.mimeType) throw new Error("file is required");
+
+  const contract = targetedContract({ mode, fields, context, reason, attempt, schema: FINANCIAMIENTO_SCHEMA_V2 });
+  if (contract) {
+    const extracted = await runTargetedDocumentExtraction({
+      documentType: "FINANCIAMIENTO",
+      prompt: FINANCIAMIENTO_PROMPT_V1,
+      schema: FINANCIAMIENTO_SCHEMA_V2,
+      file,
+      contract,
+    });
+    const values = Object.fromEntries(contract.fields.map((field) => [field, extracted[field] ?? null]));
+    if (Object.hasOwn(values, "vin")) values.vin = normalizeVin(values.vin) || null;
+    return {
+      tenant_id: tenantId,
+      document_type: "FINANCIAMIENTO",
+      contract_version: CONTRACT_VERSION,
+      file_id: fileId,
+      mode: EXTRACTION_MODE.TARGETED,
+      fields: contract.fields,
+      context: contract.context,
+      reason: contract.reason,
+      attempt: contract.attempt,
+      values,
+      parse_error: extracted._parse_error === true,
+      status: extracted._parse_error === true ? "PARSE_ERROR" : "OK",
+    };
+  }
 
   const extracted = await runDocumentExtraction({
     prompt: FINANCIAMIENTO_PROMPT_V1,

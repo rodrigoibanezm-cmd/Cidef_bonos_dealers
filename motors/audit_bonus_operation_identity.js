@@ -1,11 +1,20 @@
 import { db } from "../lib/db.js";
-import { normalizeOperationIdentity } from "../lib/operation_identity_normalizer.js";
+import { normalizeOperationIdentity } from "../lib/normalize_operation_identity.js";
+import { persistOperationIdentityAudit } from "../lib/persist_operation_identity_audit.js";
 
 function normVin(value) {
   return String(value || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
 }
 
-export async function auditBonusOperationIdentity({ tenantId, vin, fv = null, ins = null, sql = null }) {
+export async function auditBonusOperationIdentity({
+  tenantId,
+  vin,
+  fv = null,
+  ins = null,
+  sql = null,
+  phase = "GLOBAL_FINAL",
+  issueCode = "INS_RUT_CLIENTE_MISMATCH",
+}) {
   if (!tenantId) throw new Error("tenantId is required");
   if (!vin) throw new Error("vin is required");
   const dbSql = sql || db();
@@ -29,26 +38,14 @@ export async function auditBonusOperationIdentity({ tenantId, vin, fv = null, in
   }
 
   const result = normalizeOperationIdentity({ fv, ins });
-  await dbSql`
-    insert into bonus_operation_identity_audits (
-      tenant_id, vin, status, resolution_method, resolved_role,
-      nombre_cliente_resuelto, rut_cliente_resuelto, reason, evidence
-    ) values (
-      ${tenantId}, ${normalizedVin}, ${result.status}, ${result.method ?? null}, ${result.role ?? null},
-      ${result.nombre_cliente ?? null}, ${result.rut_cliente ?? null}, ${result.reason ?? null},
-      ${JSON.stringify(result.evidence ?? {})}::jsonb
-    )
-    on conflict (tenant_id, vin)
-    do update set
-      status=excluded.status,
-      resolution_method=excluded.resolution_method,
-      resolved_role=excluded.resolved_role,
-      nombre_cliente_resuelto=excluded.nombre_cliente_resuelto,
-      rut_cliente_resuelto=excluded.rut_cliente_resuelto,
-      reason=excluded.reason,
-      evidence=excluded.evidence,
-      updated_at=now()
-  `;
+  await persistOperationIdentityAudit({
+    tenantId,
+    vin: normalizedVin,
+    result,
+    phase,
+    issueCode,
+    sql: dbSql,
+  });
 
   return result;
 }

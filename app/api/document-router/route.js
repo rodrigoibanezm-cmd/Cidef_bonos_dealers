@@ -72,12 +72,13 @@ export async function POST(request) {
     console.log(`[DOC_DB] archivo=${key} tipo=${documentType} id=${processed.persisted?.id ?? "null"} status=${processed.persisted?.status ?? "null"}`);
 
     let finalization = null;
-    if (sourceVin) {
+    const operationVin = sourceVin || processed.extraction?.vin || processed.extraction?.vin_original || null;
+    if (operationVin) {
       try {
-        finalization = await finalizeBonusOperation({ tenantId, vin: sourceVin });
-        console.log(`[BONUS_FINALIZE] tenant=${tenantId} vin=${sourceVin} operations=${finalization.consolidated?.processed ?? 0} calculations=${finalization.calculated?.length ?? 0}`);
+        finalization = await finalizeBonusOperation({ tenantId, vin: operationVin });
+        console.log(`[BONUS_FINALIZE] tenant=${tenantId} vin=${operationVin} operations=${finalization.consolidated?.processed ?? 0} calculations=${finalization.calculated?.length ?? 0}`);
       } catch (finalizeError) {
-        console.error(`[BONUS_FINALIZE_ERROR] tenant=${tenantId} vin=${sourceVin}`, finalizeError);
+        console.error(`[BONUS_FINALIZE_ERROR] tenant=${tenantId} vin=${operationVin}`, finalizeError);
       }
     }
 

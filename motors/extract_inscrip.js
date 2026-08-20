@@ -1,5 +1,10 @@
 import { runDocumentExtraction } from "../lib/run_document_extraction.js";
 import { INSCRIP_PROMPT_V1 } from "../prompts/inscrip.js";
+import {
+  EXTRACTION_MODE,
+  runTargetedDocumentExtraction,
+  targetedContract,
+} from "../lib/targeted_document_extraction.js";
 
 const CONTRACT_VERSION = "3";
 
@@ -28,10 +33,42 @@ function normalizeVin(value) {
   return String(value || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
 }
 
-export async function extractInscrip({ tenantId, fileId, file }) {
+export async function extractInscrip({
+  tenantId,
+  fileId,
+  file,
+  mode = EXTRACTION_MODE.FULL,
+  fields = null,
+  context = null,
+  reason = null,
+  attempt = null,
+}) {
   if (!tenantId) throw new Error("tenantId is required");
   if (!fileId) throw new Error("fileId is required");
   if (!file?.base64 || !file?.mimeType) throw new Error("file is required");
+
+  const contract = targetedContract({ mode, fields, context, reason, attempt, schema: INSCRIP_SCHEMA_V1 });
+  if (contract) {
+    const extracted = await runTargetedDocumentExtraction({
+      documentType: "INSCRIPCION", prompt: INSCRIP_PROMPT_V1, schema: INSCRIP_SCHEMA_V1, file, contract,
+    });
+    const values = Object.fromEntries(contract.fields.map((field) => [field, extracted[field] ?? null]));
+    if (Object.hasOwn(values, "vin_documento")) values.vin_documento = normalizeVin(values.vin_documento) || null;
+    return {
+      tenant_id: tenantId,
+      document_type: "INSCRIPCION",
+      contract_version: CONTRACT_VERSION,
+      file_id: fileId,
+      mode: EXTRACTION_MODE.TARGETED,
+      fields: contract.fields,
+      context: contract.context,
+      reason: contract.reason,
+      attempt: contract.attempt,
+      values,
+      parse_error: extracted._parse_error === true,
+      status: extracted._parse_error === true ? "PARSE_ERROR" : "OK",
+    };
+  }
 
   const extracted = await runDocumentExtraction({
     prompt: INSCRIP_PROMPT_V1,
