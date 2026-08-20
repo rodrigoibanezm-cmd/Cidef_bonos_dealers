@@ -41,6 +41,15 @@ function chassisStatus({ chassis, expectedVin, fullExtractionVin }) {
   return "OK";
 }
 
+function validationStatus({ chassis, expectedVin }) {
+  if (!chassis.vin || !chassis.readable || chassis.parse_error) return "VIN_UNREADABLE";
+  if (chassis.retried && chassis.retry_consistent === false) return "VIN_ERROR";
+
+  const expected = normalizeChassis(expectedVin) || null;
+  if (expected && chassis.vin !== expected) return "VIN_MISMATCH";
+  return "OK";
+}
+
 export async function validateFcVin({ tenantId, fileId, expectedVin = null, file }) {
   if (!tenantId) throw new Error("tenantId is required");
   if (!fileId) throw new Error("fileId is required");
@@ -63,7 +72,7 @@ export async function validateFcVin({ tenantId, fileId, expectedVin = null, file
     chassis_retry_read: chassis.retry_vin,
     chassis_retry_consistent: chassis.retry_consistent,
     parse_error: chassis.parse_error,
-    status: !chassis.vin || !chassis.readable || chassis.parse_error ? "VIN_UNREADABLE" : "OK",
+    status: validationStatus({ chassis, expectedVin: expected }),
   };
 }
 
