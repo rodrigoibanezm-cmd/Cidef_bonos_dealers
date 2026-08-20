@@ -2,7 +2,7 @@ import { runDocumentExtraction } from "../lib/run_document_extraction.js";
 import { extractFcChassis, normalizeChassis } from "../lib/extract_fc_chassis.js";
 import { FC_PROMPT_V1 } from "../prompts/fc.js";
 
-const CONTRACT_VERSION = "4";
+const CONTRACT_VERSION = "5";
 
 const FC_SCHEMA_V1 = {
   type: "object",
@@ -26,14 +26,28 @@ const FC_SCHEMA_V1 = {
   ],
 };
 
-export async function validateFcVin({ tenantId, fileId, expectedVin, file }) {
+function chassisStatus({ chassis, expectedVin, fullExtractionVin }) {
+  if (!chassis.vin || !chassis.readable || chassis.parse_error) return "VIN_UNREADABLE";
+
+  const expected = normalizeChassis(expectedVin) || null;
+  const fullMatchesChassis = Boolean(fullExtractionVin && fullExtractionVin === chassis.vin);
+
+  if (chassis.retried && chassis.retry_consistent === false && !fullMatchesChassis) {
+    return "VIN_ERROR";
+  }
+
+  if (fullExtractionVin && !fullMatchesChassis) return "VIN_INCONSISTENT";
+  if (expected && chassis.vin !== expected) return "VIN_MISMATCH";
+  return "OK";
+}
+
+export async function validateFcVin({ tenantId, fileId, expectedVin = null, file }) {
   if (!tenantId) throw new Error("tenantId is required");
   if (!fileId) throw new Error("fileId is required");
   if (!file?.base64 || !file?.mimeType) throw new Error("file is required");
 
   const chassis = await extractFcChassis({ file, comparisonVin: expectedVin });
   const expected = normalizeChassis(expectedVin) || null;
-  const vinMatch = Boolean(chassis.vin && expected && chassis.vin === expected);
 
   return {
     tenant_id: tenantId,
@@ -42,29 +56,68 @@ export async function validateFcVin({ tenantId, fileId, expectedVin, file }) {
     file_id: fileId,
     expected_vin: expected,
     vin_documento: chassis.vin,
-    vin_match: vinMatch,
+    vin_match: expected ? Boolean(chassis.vin && chassis.vin === expected) : null,
     readable: chassis.readable,
     chassis_retried: chassis.retried,
     chassis_first_read: chassis.first_vin,
+    chassis_retry_read: chassis.retry_vin,
+    chassis_retry_consistent: chassis.retry_consistent,
     parse_error: chassis.parse_error,
-    status: !chassis.vin ? "VIN_UNREADABLE" : expected && !vinMatch ? "VIN_MISMATCH" : "OK",
+    status: !chassis.vin || !chassis.readable || chassis.parse_error ? "VIN_UNREADABLE" : "OK",
   };
 }
 
 export async function extractFc({ tenantId, fileId, expectedVin = null, file }) {
-  const vinValidation = await validateFcVin({ tenantId, fileId, expectedVin, file });
-  if (!vinValidation.vin_documento) return vinValidation;
+  if (!tenantId) throw new Error("tenantId is required");
+  if (!fileId) throw new Error("fileId is required");
+  if (!file?.base64 || !file?.mimeType) throw new Error("file is required");
+
+  const chassis = await extractFcChassis({ file, comparisonVin: expectedVin });
+  const expected = normalizeChassis(expectedVin) || null;
+
+  if (!chassis.vin || !chassis.readable || chassis.parse_error) {
+    return {
+      tenant_id: tenantId,
+      document_type: "FC",
+      contract_version: CONTRACT_VERSION,
+      file_id: fileId,
+      expected_vin: expected,
+      vin: chassis.vin,
+      vin_documento: chassis.vin,
+      vin_match: expected ? Boolean(chassis.vin && chassis.vin === expected) : null,
+      readable: chassis.readable,
+      chassis_retried: chassis.retried,
+      chassis_first_read: chassis.first_vin,
+      chassis_retry_read: chassis.retry_vin,
+      chassis_retry_consistent: chassis.retry_consistent,
+      parse_error: chassis.parse_error,
+      status: "VIN_UNREADABLE",
+    };
+  }
 
   const extracted = await runDocumentExtraction({ prompt: FC_PROMPT_V1, schema: FC_SCHEMA_V1, file });
   const fullExtractionVin = normalizeChassis(extracted.vin) || null;
-  const chassisVin = vinValidation.vin_documento;
-  const extractionVinMatch = !fullExtractionVin || fullExtractionVin === chassisVin;
+  const vinMatch = expected ? chassis.vin === expected : null;
+  const status = extracted._parse_error === true
+    ? "EXTRACTION_ERROR"
+    : chassisStatus({ chassis, expectedVin: expected, fullExtractionVin });
 
   return {
-    ...vinValidation,
-    vin: chassisVin,
+    tenant_id: tenantId,
+    document_type: "FC",
+    contract_version: CONTRACT_VERSION,
+    file_id: fileId,
+    expected_vin: expected,
+    vin: chassis.vin,
+    vin_documento: chassis.vin,
+    vin_match: vinMatch,
+    readable: chassis.readable,
+    chassis_retried: chassis.retried,
+    chassis_first_read: chassis.first_vin,
+    chassis_retry_read: chassis.retry_vin,
+    chassis_retry_consistent: chassis.retry_consistent,
     full_extraction_vin: fullExtractionVin,
-    extraction_vin_match: extractionVinMatch,
+    extraction_vin_match: fullExtractionVin ? fullExtractionVin === chassis.vin : null,
     folio_factura_compra: extracted.folio_factura_compra ?? null,
     fecha_factura_compra: extracted.fecha_factura_compra ?? null,
     precio_compra_neto: extracted.precio_compra_neto ?? null,
@@ -76,6 +129,6 @@ export async function extractFc({ tenantId, fileId, expectedVin = null, file }) 
     modelo: extracted.modelo ?? null,
     anio: extracted.anio ?? null,
     parse_error: extracted._parse_error === true,
-    status: extracted._parse_error === true ? "EXTRACTION_ERROR" : !extractionVinMatch ? "VIN_INCONSISTENT" : vinValidation.status,
+    status,
   };
 }
