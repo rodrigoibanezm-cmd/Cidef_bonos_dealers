@@ -13,6 +13,44 @@ const FIELD_MAP = {
   REPOS: [],
 };
 
+function asList(value) {
+  if (Array.isArray(value)) return value.filter(Boolean);
+  if (!value) return [];
+  try {
+    const parsed = typeof value === "string" ? JSON.parse(value) : value;
+    return Array.isArray(parsed) ? parsed.filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+}
+
+function AuditSummary({ request }) {
+  const cierre = String(request.cierre_estado || "").toUpperCase();
+  const inconsistencias = asList(request.inconsistencias);
+  const tone = cierre === "VERDE" ? styles.auditGreen : cierre === "AMARILLO" ? styles.auditYellow : styles.auditRed;
+  const label = cierre || "SIN CIERRE";
+
+  return (
+    <section className={`${styles.auditSummary} ${tone}`}>
+      <div className={styles.auditHeadline}>
+        <div>
+          <small>Resultado auditor automático</small>
+          <strong>{label}</strong>
+        </div>
+        <span>{request.audit_status || "SIN ESTADO"}</span>
+      </div>
+      <div className={styles.auditBody}>
+        <div><small>Documentación</small><strong>{request.documentacion_estado || "-"}</strong></div>
+        <div><small>Revisión humana</small><strong>{request.requiere_revision_humana ? "Requerida" : "No requerida"}</strong></div>
+        <div className={styles.auditObservations}>
+          <small>Observaciones activas</small>
+          {inconsistencias.length ? <ul>{inconsistencias.map((item) => <li key={item}>{item}</li>)}</ul> : <strong>Sin observaciones</strong>}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default async function RequestReviewPage({ searchParams }) {
   const params = await searchParams;
   const id = String(params?.id || "").trim();
@@ -29,6 +67,8 @@ export default async function RequestReviewPage({ searchParams }) {
         <a className={styles.back} href="/admin-v2">← Volver a activos</a>
         <div className={styles.topbar}><div><span className={styles.eyebrow}>CIDEF · BONOS DEALERS</span><h1>Revisión · {review.request.vin}</h1><div className={styles.meta}><span>{review.request.tenant_id}</span><span>{review.request.estado}</span><span>{review.review_complete ? "Revisión completa" : `Documento ${step} de ${review.sequence.length}`}</span></div></div></div>
       </header>
+
+      <AuditSummary request={review.request} />
 
       {review.review_complete ? <section className={styles.complete}><strong>Solicitud aprobada</strong><span>Todos los documentos requeridos fueron revisados.</span></section> : current ? (
         <ReviewClient requestId={review.request.id} document={current} fields={FIELD_MAP[current.document_type] || []} step={step} total={review.sequence.length} auditors={auditors} />
