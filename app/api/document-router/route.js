@@ -3,6 +3,7 @@ import { classifyDocumentFromR2 } from "../../../lib/document_router.js";
 import { getR2Object } from "../../../lib/r2.js";
 import { processExtractedDocument } from "../../../lib/process_extracted_document.js";
 import { resolveFcOrReposicion } from "../../../lib/resolve_fc_reposicion.js";
+import { finalizeBonusOperation } from "../../../lib/finalize_bonus_operation.js";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -70,6 +71,16 @@ export async function POST(request) {
     console.log(`[DOC_EXTRACT] archivo=${key} tipo=${documentType} source=${sourceFilename ?? "null"} status=${processed.extraction?.status ?? "null"}`);
     console.log(`[DOC_DB] archivo=${key} tipo=${documentType} id=${processed.persisted?.id ?? "null"} status=${processed.persisted?.status ?? "null"}`);
 
+    let finalization = null;
+    if (sourceVin) {
+      try {
+        finalization = await finalizeBonusOperation({ tenantId, vin: sourceVin });
+        console.log(`[BONUS_FINALIZE] tenant=${tenantId} vin=${sourceVin} operations=${finalization.consolidated?.processed ?? 0} calculations=${finalization.calculated?.length ?? 0}`);
+      } catch (finalizeError) {
+        console.error(`[BONUS_FINALIZE_ERROR] tenant=${tenantId} vin=${sourceVin}`, finalizeError);
+      }
+    }
+
     return NextResponse.json({
       ok: true,
       key,
@@ -79,6 +90,7 @@ export async function POST(request) {
       route_reason: resolved.reason || null,
       extraction: processed.extraction,
       persisted: processed.persisted,
+      finalization,
     });
   } catch (error) {
     console.error("[DOC_PIPELINE_ERROR]", error);
