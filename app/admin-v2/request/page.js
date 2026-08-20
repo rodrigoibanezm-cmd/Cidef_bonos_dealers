@@ -34,7 +34,7 @@ export default async function RequestReviewPage({ searchParams }) {
   const [review,auditors]=await Promise.all([id?getBonusRequestForReview(id):null,listBonusAuditors()]);
   if(!review)return <main className={styles.screen}><a className={styles.back} href="/admin-v2">← Volver</a><p>Solicitud no encontrada.</p></main>;
   const sequenceDocs=review.sequence.map((type)=>review.documents.find((x)=>x.document_type===type)).filter(Boolean);
-  const defaultType=review.next_document_type || sequenceDocs[0]?.document_type || "";
+  const defaultType=sequenceDocs[0]?.document_type || "";
   const selectedType=sequenceDocs.some((x)=>x.document_type===requestedDoc)?requestedDoc:defaultType;
   const current=sequenceDocs.find((x)=>x.document_type===selectedType)||null;
   const currentIndex=current?sequenceDocs.findIndex((x)=>x.document_type===current.document_type):-1;
