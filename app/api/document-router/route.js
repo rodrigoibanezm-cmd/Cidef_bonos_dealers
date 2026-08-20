@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { classifyDocumentFromR2 } from "../../../lib/document_router.js";
 import { getR2Object } from "../../../lib/r2.js";
 import { processExtractedDocument } from "../../../lib/process_extracted_document.js";
+import { resolveFcOrReposicion } from "../../../lib/resolve_fc_reposicion.js";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -46,8 +47,19 @@ export async function POST(request) {
     const tenantId = tenantFromKey(key);
     const sourceVin = vinFromSourceFilename(sourceFilename);
 
-    const processed = await processExtractedDocument({
+    const resolved = await resolveFcOrReposicion({
       documentType: result.document_type,
+      sourceVin,
+      file,
+    });
+    const documentType = resolved.documentType;
+
+    if (resolved.overridden) {
+      console.log(`[DOC_ROUTE_OVERRIDE] archivo=${key} source=${sourceFilename ?? "null"} from=${result.document_type} to=${documentType} operation_vin=${sourceVin ?? "null"} document_vin=${resolved.chassis?.vin ?? "null"} reason=${resolved.reason}`);
+    }
+
+    const processed = await processExtractedDocument({
+      documentType,
       tenantId,
       fileId: key,
       sourceFilename,
@@ -55,13 +67,16 @@ export async function POST(request) {
       file,
     });
 
-    console.log(`[DOC_EXTRACT] archivo=${key} tipo=${result.document_type} source=${sourceFilename ?? "null"} status=${processed.extraction?.status ?? "null"}`);
-    console.log(`[DOC_DB] archivo=${key} tipo=${result.document_type} id=${processed.persisted?.id ?? "null"} status=${processed.persisted?.status ?? "null"}`);
+    console.log(`[DOC_EXTRACT] archivo=${key} tipo=${documentType} source=${sourceFilename ?? "null"} status=${processed.extraction?.status ?? "null"}`);
+    console.log(`[DOC_DB] archivo=${key} tipo=${documentType} id=${processed.persisted?.id ?? "null"} status=${processed.persisted?.status ?? "null"}`);
 
     return NextResponse.json({
       ok: true,
       key,
       ...result,
+      resolved_document_type: documentType,
+      route_override: resolved.overridden,
+      route_reason: resolved.reason || null,
       extraction: processed.extraction,
       persisted: processed.persisted,
     });
