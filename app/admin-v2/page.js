@@ -1,6 +1,6 @@
 import {
   getApprovalQueueKpis,
-  listApprovedBonusRequestsByDealer,
+  listBonusRequestsByDealer,
   listDealers,
   listPendingBonusRequests,
 } from "../../lib/approval_queue.js";
@@ -15,105 +15,79 @@ function dateLabel(value) {
   return new Intl.DateTimeFormat("es-CL", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(value));
 }
 
+function money(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? `$ ${Math.trunc(number).toLocaleString("es-CL")}` : "-";
+}
+
 function KPIBar({ kpis }) {
   const items = [
     ["◫", kpis.total_mes ?? 0, "Aprobadas mes"],
     ["▦", kpis.total_ano ?? 0, "Aprobadas año"],
-    ["◷", kpis.total_pendientes ?? 0, "Pendientes"],
+    ["◷", kpis.total_pendientes ?? 0, "Activas"],
     ["!", kpis.total_urgentes ?? 0, "Urgentes"],
   ];
-  return (
-    <section className={styles.summary}>
-      {items.map(([icon, value, label]) => (
-        <div className={styles.summaryItem} key={label}>
-          <span aria-hidden="true">{icon}</span>
-          <div><strong>{value}</strong><small>{label}</small></div>
-        </div>
-      ))}
-    </section>
-  );
+  return <section className={styles.summary}>{items.map(([icon, value, label]) => <div className={styles.summaryItem} key={label}><span aria-hidden="true">{icon}</span><div><strong>{value}</strong><small>{label}</small></div></div>)}</section>;
 }
 
 function DealerMenu({ dealers, selectedDealer }) {
-  return (
-    <aside className={styles.sidebar}>
-      <div className={styles.brand}><strong>CIDEF</strong><span>Bonos Dealers</span></div>
-      <a className={`${styles.activeQueue} ${!selectedDealer ? styles.activeDealer : ""}`} href="/admin-v2">
-        <span>Activos</span>
-      </a>
-      <div className={styles.sideTitle}>Dealers</div>
-      <nav className={styles.dealerList}>
-        {dealers.map((dealer) => (
-          <a
-            className={selectedDealer === dealer.dealer ? styles.activeDealer : ""}
-            href={`/admin-v2?dealer=${encodeURIComponent(dealer.dealer)}`}
-            key={dealer.dealer}
-          >
-            <span>{dealer.dealer}</span>
-          </a>
-        ))}
-      </nav>
-    </aside>
-  );
+  return <aside className={styles.sidebar}>
+    <div className={styles.brand}><strong>CIDEF</strong><span>Bonos Dealers</span></div>
+    <a className={`${styles.activeQueue} ${!selectedDealer ? styles.activeDealer : ""}`} href="/admin-v2">Activos</a>
+    <div className={styles.sideTitle}>Dealers</div>
+    <nav className={styles.dealerList}>{dealers.map((dealer) => <a className={selectedDealer === dealer.dealer ? styles.activeDealer : ""} href={`/admin-v2?dealer=${encodeURIComponent(dealer.dealer)}`} key={dealer.dealer}>{dealer.dealer}</a>)}</nav>
+  </aside>;
 }
 
-function QueueTable({ rows, historical }) {
-  if (!rows.length) {
-    return <section className={styles.empty}><strong>Sin solicitudes</strong><span>No hay registros para mostrar.</span></section>;
-  }
-  return (
-    <section className={styles.surface}>
-      <table className={styles.table}>
-        <thead><tr>
-          <th>VIN</th><th>Marca / Modelo</th><th>Dealer</th><th>Ingreso</th><th>Días</th><th>Estado</th><th>Entrada</th>
-        </tr></thead>
-        <tbody>
-          {rows.map((row) => {
-            const urgent = row.estado_cola === "URGENTE";
-            return (
-              <tr key={row.id}>
-                <td><a className={styles.primary} href={`/admin-v2/request?id=${encodeURIComponent(row.id)}`}><strong>{row.vin || "-"}</strong></a></td>
-                <td><span className={styles.vehicle}>{row.marca || "-"}<small>{row.modelo || "Modelo no disponible"}</small></span></td>
-                <td>{row.tenant_id || "-"}</td>
-                <td>{dateLabel(row.fecha_ingreso)}</td>
-                <td><span className={urgent ? styles.red : ""}>{row.dias ?? 0}</span></td>
-                <td><span className={`${styles.pill} ${urgent ? styles.pillRed : historical ? styles.pillGreen : styles.pillYellow}`}>{historical ? "APROBADA" : row.estado_cola}</span></td>
-                <td><a className={styles.entry} href={`/admin-v2/request?id=${encodeURIComponent(row.id)}`}>Abrir <span>→</span></a></td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </section>
-  );
+function StatusPill({ row }) {
+  const state = row.estado === "PAGADA" ? "PAGADA" : row.estado_cola;
+  const cls = state === "URGENTE" || row.cierre_estado === "ROJO" ? styles.pillRed : row.cierre_estado === "VERDE" ? styles.pillGreen : styles.pillYellow;
+  return <span className={`${styles.pill} ${cls}`}>{state || "PENDIENTE"}</span>;
+}
+
+function SummaryTable({ rows }) {
+  if (!rows.length) return <section className={styles.empty}><strong>Sin solicitudes</strong><span>No hay registros para mostrar.</span></section>;
+  return <section className={styles.surface}><table className={styles.table}><thead><tr><th>VIN</th><th>Marca / Modelo</th><th>Dealer</th><th>Ingreso</th><th>Monto</th><th>Estado</th><th></th></tr></thead><tbody>
+    {rows.map((row) => <tr key={row.id}>
+      <td><strong>{row.vin || "-"}</strong></td>
+      <td><span className={styles.vehicle}>{row.marca || "-"}<small>{row.modelo || "Modelo no disponible"}</small></span></td>
+      <td>{row.dealer_nombre || row.tenant_id || "-"}</td>
+      <td>{dateLabel(row.fecha_ingreso)}</td>
+      <td><strong>{money(row.total_devolver)}</strong></td>
+      <td><StatusPill row={row} /></td>
+      <td><a className={styles.entry} href={`/admin-v2/request?id=${encodeURIComponent(row.id)}`}>Revisar →</a></td>
+    </tr>)}
+  </tbody></table></section>;
+}
+
+function ExtendedTable({ rows }) {
+  if (!rows.length) return <section className={styles.empty}><strong>Sin solicitudes</strong><span>No hay registros para mostrar.</span></section>;
+  return <section className={`${styles.surface} ${styles.extendedSurface}`}><table className={`${styles.table} ${styles.extendedTable}`}><thead><tr>
+    <th>Dealer</th><th>VIN</th><th>Marca</th><th>Modelo</th><th>Cliente</th><th>RUT</th><th>F. compra</th><th>Compra</th><th>F. venta</th><th>Venta</th><th>Días stock</th><th>PDV</th><th>FC</th><th>FV</th><th>INS</th><th>REPO</th><th>Carta</th><th>Bono dif.</th><th>Bono cierre</th><th>Bono fin.</th><th>Total</th><th>Cierre</th><th>Estado</th><th></th>
+  </tr></thead><tbody>{rows.map((row) => <tr key={row.id}>
+    <td>{row.dealer_nombre || row.tenant_id || "-"}</td><td><strong>{row.vin || "-"}</strong></td><td>{row.marca || "-"}</td><td>{row.modelo || "-"}</td><td>{row.nombre_cliente || "-"}</td><td>{row.rut_cliente || "-"}</td><td>{dateLabel(row.fecha_compra)}</td><td>{money(row.monto_compra)}</td><td>{dateLabel(row.fecha_venta)}</td><td>{money(row.monto_venta)}</td><td>{row.dias_stock_dealer ?? "-"}</td><td>{row.pdv_ok || "-"}</td><td>{row.fac_compra_ok || "-"}</td><td>{row.fac_venta_ok || "-"}</td><td>{row.inscripcion_venta_ok || "-"}</td><td>{row.fac_reposicion_ok || "-"}</td><td>{row.carta_credito_ok || "-"}</td><td>{money(row.bono_dif)}</td><td>{money(row.bono_cierre)}</td><td>{money(row.bono_fin)}</td><td><strong>{money(row.total_devolver)}</strong></td><td>{row.cierre_estado || "-"}</td><td><StatusPill row={row} /></td><td><a className={styles.entry} href={`/admin-v2/request?id=${encodeURIComponent(row.id)}`}>Revisar →</a></td>
+  </tr>)}</tbody></table></section>;
 }
 
 export default async function AdminV2Page({ searchParams }) {
   const params = await searchParams;
   const selectedDealer = String(params?.dealer || "").trim();
+  const view = params?.view === "extended" ? "extended" : "summary";
   const [kpis, dealers, rows] = await Promise.all([
     getApprovalQueueKpis({ urgentDays: URGENT_DAYS }),
     listDealers(),
-    selectedDealer
-      ? listApprovedBonusRequestsByDealer({ tenantId: selectedDealer })
-      : listPendingBonusRequests({ urgentDays: URGENT_DAYS }),
+    selectedDealer ? listBonusRequestsByDealer({ dealer: selectedDealer, urgentDays: URGENT_DAYS }) : listPendingBonusRequests({ urgentDays: URGENT_DAYS }),
   ]);
+  const baseHref = selectedDealer ? `/admin-v2?dealer=${encodeURIComponent(selectedDealer)}&` : "/admin-v2?";
 
-  return (
-    <main className={styles.screen}>
-      <DealerMenu dealers={dealers} selectedDealer={selectedDealer} />
-      <div className={styles.content}>
-        <header className={styles.header}>
-          <div>
-            <span className={styles.eyebrow}>CIDEF · BONOS DEALERS</span>
-            <h1>{selectedDealer ? `Aprobadas · ${selectedDealer}` : "Solicitudes pendientes"}</h1>
-          </div>
-          {selectedDealer ? <a className={styles.back} href="/admin-v2">Volver a pendientes</a> : null}
-        </header>
-        <KPIBar kpis={kpis} />
-        <QueueTable rows={rows} historical={Boolean(selectedDealer)} />
-        <footer className={styles.footer}>{rows.length} solicitudes</footer>
-      </div>
-    </main>
-  );
+  return <main className={styles.screen}>
+    <DealerMenu dealers={dealers} selectedDealer={selectedDealer} />
+    <div className={styles.content}>
+      <header className={styles.header}><div><span className={styles.eyebrow}>CIDEF · BONOS DEALERS</span><h1>{selectedDealer ? selectedDealer : "Solicitudes activas"}</h1></div></header>
+      <KPIBar kpis={kpis} />
+      <div className={styles.viewBar}><span>Vista</span><a className={view === "summary" ? styles.viewActive : ""} href={`${baseHref}view=summary`}>Resumen</a><a className={view === "extended" ? styles.viewActive : ""} href={`${baseHref}view=extended`}>Tabla extendida</a></div>
+      {view === "extended" ? <ExtendedTable rows={rows} /> : <SummaryTable rows={rows} />}
+      <footer className={styles.footer}>{rows.length} solicitudes</footer>
+    </div>
+  </main>;
 }
