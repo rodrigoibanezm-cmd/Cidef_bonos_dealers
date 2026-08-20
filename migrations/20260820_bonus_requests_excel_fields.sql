@@ -1,0 +1,18 @@
+ALTER TABLE public.bonus_requests
+  ADD COLUMN IF NOT EXISTS lista_precio_utilizada text,
+  ADD COLUMN IF NOT EXISTS price_version_id bigint,
+  ADD COLUMN IF NOT EXISTS precio_lista_venta bigint,
+  ADD COLUMN IF NOT EXISTS bono_fin_venta bigint,
+  ADD COLUMN IF NOT EXISTS bono_cierre_venta bigint,
+  ADD COLUMN IF NOT EXISTS descuentos_dealer bigint,
+  ADD COLUMN IF NOT EXISTS pdv_ok text,
+  ADD COLUMN IF NOT EXISTS fac_compra_ok text,
+  ADD COLUMN IF NOT EXISTS fac_venta_ok text,
+  ADD COLUMN IF NOT EXISTS inscripcion_venta_ok text,
+  ADD COLUMN IF NOT EXISTS fac_reposicion_ok text,
+  ADD COLUMN IF NOT EXISTS carta_credito_ok text,
+  ADD COLUMN IF NOT EXISTS bono_dif bigint,
+  ADD COLUMN IF NOT EXISTS bono_cierre bigint,
+  ADD COLUMN IF NOT EXISTS bono_fin bigint,
+  ADD COLUMN IF NOT EXISTS price_lookup_status text,
+  ADD COLUMN IF NOT EXISTS price_lookup_evidence jsonb;
