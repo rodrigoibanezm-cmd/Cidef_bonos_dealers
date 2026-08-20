@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { classifyDocumentFromR2 } from "../../../lib/document_router.js";
+import { guardDocumentRouting } from "../../../lib/document_routing_guard.js";
 import { getR2Object } from "../../../lib/r2.js";
 import { processExtractedDocument } from "../../../lib/process_extracted_document.js";
 import { resolveFcOrReposicion } from "../../../lib/resolve_fc_reposicion.js";
@@ -41,6 +42,25 @@ export async function POST(request) {
     if (result.document_type === "BASURA") {
       console.log(`[DOC_EXTRACT_SKIP] archivo=${key} tipo=BASURA`);
       return NextResponse.json({ ok: true, key, ...result, extraction: null, persisted: null });
+    }
+
+    const routingGuard = guardDocumentRouting({
+      sourceFilename,
+      classifiedType: result.document_type,
+    });
+    if (!routingGuard.allowed) {
+      console.warn(`[DOC_ROUTE_UNCERTAIN] archivo=${key} source=${sourceFilename ?? "null"} hint=${routingGuard.sourceHint ?? "null"} classified=${result.document_type} reason=${routingGuard.reason}`);
+      return NextResponse.json({
+        ok: true,
+        key,
+        ...result,
+        resolved_document_type: "ROUTING_UNCERTAIN",
+        route_override: false,
+        route_reason: routingGuard.reason,
+        extraction: null,
+        persisted: null,
+        finalization: null,
+      });
     }
 
     const object = await getR2Object(key);
@@ -88,7 +108,7 @@ export async function POST(request) {
       ...result,
       resolved_document_type: documentType,
       route_override: resolved.overridden,
-      route_reason: resolved.reason || null,
+      route_reason: resolved.reason || routingGuard.reason || null,
       extraction: processed.extraction,
       persisted: processed.persisted,
       finalization,
