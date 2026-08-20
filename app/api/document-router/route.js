@@ -2,9 +2,10 @@ import { NextResponse } from "next/server";
 import { classifyDocumentFromR2 } from "../../../lib/document_router.js";
 import { getR2Object } from "../../../lib/r2.js";
 import { persistReposicionExtraction } from "../../../lib/persist_reposicion_extraction.js";
+import { persistFcExtraction } from "../../../lib/persist_fc_extraction.js";
 import { findVehicleOperationByVin } from "../../../lib/find_vehicle_operation_by_vin.js";
 import { extractReposicion } from "../../../motors/extract_reposicion.js";
-import { validateFcVin } from "../../../motors/extract_fc.js";
+import { extractFc, validateFcVin } from "../../../motors/extract_fc.js";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -50,6 +51,7 @@ export async function POST(request) {
 
     const object = await getR2Object(key);
     const file = { base64: object.buffer.toString("base64"), mimeType: object.contentType || "image/jpeg" };
+    const tenantId = tenantFromKey(key);
     const sourceVin = vinFromSourceFilename(sourceFilename);
     const repoHint = sourceSuggestsReposicion(sourceFilename);
 
@@ -58,11 +60,9 @@ export async function POST(request) {
     let recoveredOperation = null;
 
     if (sourceVin) {
-      vinCheck = await validateFcVin({ tenantId: tenantFromKey(key), fileId: key, expectedVin: sourceVin, file });
+      vinCheck = await validateFcVin({ tenantId, fileId: key, expectedVin: sourceVin, file });
       finalType = vinCheck.vin_match ? "FC" : "REPOSICION";
 
-      // Malformed source case: file explicitly says REPO/REPOS but carries the same VIN
-      // as the invoice. Recover the owning dealer/operation from central inventory.
       if (vinCheck.vin_match && repoHint) {
         recoveredOperation = await findVehicleOperationByVin(sourceVin);
         if (recoveredOperation?.dealer_nombre) finalType = "REPOSICION";
@@ -72,11 +72,15 @@ export async function POST(request) {
     console.log(`[CIDEF_INVOICE_ROUTE] archivo=${key} source=${sourceFilename ?? "null"} source_vin=${sourceVin ?? "null"} doc_vin=${vinCheck?.vin_documento ?? "null"} repo_hint=${repoHint} tipo=${finalType}`);
 
     if (finalType === "FC") {
-      console.log(`[DOC_EXTRACT_SKIP] archivo=${key} tipo=FC motivo=ONLY_REPOSICION_ENABLED`);
-      return NextResponse.json({ ok: true, key, ...result, document_type: "FC", extraction: null });
+      const extraction = await extractFc({ tenantId, fileId: key, expectedVin: sourceVin, file });
+      extraction.source_filename = sourceFilename;
+      const persisted = await persistFcExtraction(extraction);
+      console.log(`[FC_EXTRACT] archivo=${key} source=${sourceFilename ?? "null"} resultado=${JSON.stringify(extraction)}`);
+      console.log(`[FC_DB] archivo=${key} id=${persisted?.id ?? "null"} status=${persisted?.status ?? "null"}`);
+      return NextResponse.json({ ok: true, key, ...result, document_type: "FC", extraction, persisted });
     }
 
-    const extraction = await extractReposicion({ tenantId: tenantFromKey(key), fileId: key, file });
+    const extraction = await extractReposicion({ tenantId, fileId: key, file });
     extraction.source_filename = sourceFilename;
     extraction.vin_original = extraction.vin_original || sourceVin;
 
