@@ -125,6 +125,11 @@ export async function auditRouter({
   for (const issue of initialClosure.issues) {
     const action = planAuditAction(issue, effectiveDocuments);
     if (!action) continue;
+
+    // First use the evidence already captured by the full extraction. Targeted
+    // extraction is only a fallback for fields that are still insufficient.
+    if (issueResolved(issue, effectiveDocuments, vin)) continue;
+
     const row = effectiveDocuments[DOC_KEYS[action.documentType]];
     if (!row?.file_id) {
       exhaustedIssues.push(issue.code);
@@ -141,8 +146,7 @@ export async function auditRouter({
         });
       }
     }
-    const requiresFreshIdentityRead = issue.code === "INS_RUT_CLIENTE_MISMATCH" && previous.length === 0;
-    if (!requiresFreshIdentityRead && issueResolved(issue, effectiveDocuments, vin)) continue;
+    if (issueResolved(issue, effectiveDocuments, vin)) continue;
 
     for (let attempt = previous.length + 1; attempt <= 2; attempt += 1) {
       let extraction = null;
