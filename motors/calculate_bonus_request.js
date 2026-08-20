@@ -1,28 +1,14 @@
 import { db } from "../lib/db.js";
 import { calculateBonusBusinessRules } from "../lib/bonus_business_rules.js";
 import { extractPriceBonuses, priceListValue } from "../lib/price_bonus_payload.js";
+import { rankPriceVersions } from "../lib/price_version_match.js";
 
 function normalize(value) {
   return String(value || "").trim().toUpperCase();
 }
 
-function tokens(value) {
-  return normalize(value).replace(/[^A-Z0-9]+/g, " ").split(/\s+/).filter(Boolean);
-}
-
-function scoreCandidate(inventory, candidate) {
-  const desc = new Set(tokens(inventory.desc_abrev));
-  const candidateTokens = tokens(`${candidate.modelo} ${candidate.version}`);
-  let score = candidateTokens.reduce((sum, token) => sum + (desc.has(token) ? 2 : 0), 0);
-  if (candidate.traccion && normalize(inventory.desc_abrev).includes(normalize(candidate.traccion).replace(/\s/g, ""))) score += 5;
-  if (candidate.transmision) {
-    const t = normalize(candidate.transmision).replace(/\s/g, "");
-    if (normalize(inventory.desc_abrev).replace(/\s/g, "").includes(t.replace(/^\d+/, ""))) score += 3;
-  }
-  if (candidate.cc && normalize(inventory.desc_abrev).includes(normalize(candidate.cc))) score += 3;
-  if (candidate.combustible && normalize(candidate.combustible) === normalize(inventory.tipo_motor)) score += 2;
-  if (candidate.euro && normalize(inventory.norma).includes(normalize(candidate.euro))) score += 2;
-  return score;
+function jsonb(value) {
+  return JSON.stringify(value ?? null);
 }
 
 async function lookupPrice(sql, vin, fecha) {
@@ -43,17 +29,35 @@ async function lookupPrice(sql, vin, fecha) {
     JOIN LATERAL (
       SELECT * FROM price_history ph
       WHERE ph.price_version_id = pv.price_version_id AND ph.vigencia_desde <= ${fecha}
-      ORDER BY ph.vigencia_desde DESC LIMIT 1
+      ORDER BY ph.vigencia_desde DESC, ph.created_at DESC LIMIT 1
     ) ph ON true
     WHERE UPPER(TRIM(pv.marca)) = ${normalize(inventory.marca)} AND pv.activo = true
   `;
 
-  const ranked = candidates.map((row) => ({ row, score: scoreCandidate(inventory, row) })).sort((a, b) => b.score - a.score);
+  const ranked = rankPriceVersions(inventory, candidates);
   if (!ranked.length || ranked[0].score <= 0) return { status: "not_found", inventory };
+
   if (ranked[1] && ranked[1].score === ranked[0].score && ranked[1].row.price_version_id !== ranked[0].row.price_version_id) {
-    return { status: "ambiguous", inventory, candidates: ranked.slice(0, 5).map(({ row, score }) => ({ price_version_id: row.price_version_id, modelo: row.modelo, version: row.version, score })) };
+    return {
+      status: "ambiguous",
+      inventory,
+      candidates: ranked.slice(0, 5).map(({ row, score, reasons }) => ({
+        price_version_id: row.price_version_id,
+        modelo: row.modelo,
+        version: row.version,
+        score,
+        reasons,
+      })),
+    };
   }
-  return { status: "ok", inventory, row: ranked[0].row, score: ranked[0].score };
+
+  return {
+    status: "ok",
+    inventory,
+    row: ranked[0].row,
+    score: ranked[0].score,
+    match_reasons: ranked[0].reasons,
+  };
 }
 
 export async function calculateBonusRequest({ requestId }) {
@@ -66,7 +70,11 @@ export async function calculateBonusRequest({ requestId }) {
 
   const lookup = await lookupPrice(sql, request.vin, request.fecha_venta);
   if (lookup.status !== "ok") {
-    await sql`UPDATE bonus_requests SET price_lookup_status=${lookup.status}, price_lookup_evidence=${sql.json(lookup)}, updated_at=now() WHERE id=${requestId}`;
+    await sql`
+      UPDATE bonus_requests
+      SET price_lookup_status=${lookup.status}, price_lookup_evidence=${jsonb(lookup)}::jsonb, updated_at=now()
+      WHERE id=${requestId}
+    `;
     return lookup;
   }
 
@@ -98,12 +106,21 @@ export async function calculateBonusRequest({ requestId }) {
   });
 
   const evidence = {
+    inventory: {
+      vin: lookup.inventory.vin_chasis,
+      desc_abrev: lookup.inventory.desc_abrev,
+      tipo_motor: lookup.inventory.tipo_motor,
+      norma: lookup.inventory.norma,
+    },
     price_version_id: row.price_version_id,
+    modelo: row.modelo,
+    version: row.version,
     vigencia_desde: row.vigencia_desde,
     source_file: row.source_file,
     source_sheet: row.source_sheet,
     source_row: row.source_row,
     match_score: lookup.score,
+    match_reasons: lookup.match_reasons,
     componentes_cierre: bonuses.componentes_cierre,
   };
 
@@ -121,8 +138,9 @@ export async function calculateBonusRequest({ requestId }) {
       diferencia_precio=${calculated.bono_dif}, bono_financiamiento=${calculated.bono_fin},
       otro_bono=${calculated.bono_cierre},
       total_devolver=${(calculated.bono_dif ?? 0) + (calculated.bono_cierre ?? 0) + (calculated.bono_fin ?? 0)},
-      price_lookup_status='ok', price_lookup_evidence=${sql.json(evidence)}, updated_at=now()
+      price_lookup_status='ok', price_lookup_evidence=${jsonb(evidence)}::jsonb, updated_at=now()
     WHERE id=${requestId}
   `;
+
   return { status: "ok", request_id: requestId, ...bonuses, ...flags, ...calculated, evidence };
 }
