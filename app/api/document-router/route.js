@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { classifyDocumentFromR2 } from "../../../lib/document_router.js";
 import { getR2Object } from "../../../lib/r2.js";
-import { persistFcExtraction } from "../../../lib/persist_fc_extraction.js";
-import { extractFc } from "../../../motors/extract_fc.js";
+import { processExtractedDocument } from "../../../lib/process_extracted_document.js";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -37,9 +36,9 @@ export async function POST(request) {
     const sourceFilename = sourceFilenameFromKey(key);
     console.log(`[DOC_ROUTER] archivo=${key} source=${sourceFilename ?? "null"} tipo=${result.document_type} confidence=${result.confidence.toFixed(3)}`);
 
-    if (result.document_type !== "FC") {
-      console.log(`[DOC_EXTRACT_SKIP] archivo=${key} tipo=${result.document_type} motivo=ONLY_FC_ENABLED`);
-      return NextResponse.json({ ok: true, key, ...result, extraction: null });
+    if (result.document_type === "BASURA") {
+      console.log(`[DOC_EXTRACT_SKIP] archivo=${key} tipo=BASURA`);
+      return NextResponse.json({ ok: true, key, ...result, extraction: null, persisted: null });
     }
 
     const object = await getR2Object(key);
@@ -47,21 +46,25 @@ export async function POST(request) {
     const tenantId = tenantFromKey(key);
     const sourceVin = vinFromSourceFilename(sourceFilename);
 
-    const extraction = await extractFc({
+    const processed = await processExtractedDocument({
+      documentType: result.document_type,
       tenantId,
       fileId: key,
-      expectedVin: sourceVin,
+      sourceFilename,
+      sourceVin,
       file,
     });
 
-    extraction.source_filename = sourceFilename;
-    const persisted = await persistFcExtraction(extraction);
+    console.log(`[DOC_EXTRACT] archivo=${key} tipo=${result.document_type} source=${sourceFilename ?? "null"} status=${processed.extraction?.status ?? "null"}`);
+    console.log(`[DOC_DB] archivo=${key} tipo=${result.document_type} id=${processed.persisted?.id ?? "null"} status=${processed.persisted?.status ?? "null"}`);
 
-    console.log(`[FC_ROUTE] archivo=${key} source=${sourceFilename ?? "null"} source_vin=${sourceVin ?? "null"} doc_vin=${extraction?.vin_documento ?? "null"} status=${extraction.status}`);
-    console.log(`[FC_EXTRACT] archivo=${key} source=${sourceFilename ?? "null"} resultado=${JSON.stringify(extraction)}`);
-    console.log(`[FC_DB] archivo=${key} id=${persisted?.id ?? "null"} status=${persisted?.status ?? "null"}`);
-
-    return NextResponse.json({ ok: true, key, ...result, document_type: "FC", extraction, persisted });
+    return NextResponse.json({
+      ok: true,
+      key,
+      ...result,
+      extraction: processed.extraction,
+      persisted: processed.persisted,
+    });
   } catch (error) {
     console.error("[DOC_PIPELINE_ERROR]", error);
     return NextResponse.json({ ok: false, error: error?.message || "Document pipeline failed" }, { status: 500 });
