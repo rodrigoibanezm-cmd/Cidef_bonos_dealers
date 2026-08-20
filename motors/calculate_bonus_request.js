@@ -2,13 +2,10 @@ import { db } from "../lib/db.js";
 import { calculateBonusBusinessRules } from "../lib/bonus_business_rules.js";
 import { extractPriceBonuses, priceListValue } from "../lib/price_bonus_payload.js";
 import { rankPriceVersions } from "../lib/price_version_match.js";
+import { persistPriceLookupAudit } from "../lib/persist_price_lookup_audit.js";
 
 function normalize(value) {
   return String(value || "").trim().toUpperCase();
-}
-
-function jsonb(value) {
-  return JSON.stringify(value ?? null);
 }
 
 async function lookupPrice(sql, vin, fecha) {
@@ -66,13 +63,24 @@ export async function calculateBonusRequest({ requestId }) {
   const requests = await sql`SELECT * FROM bonus_requests WHERE id = ${requestId} LIMIT 1`;
   const request = requests[0];
   if (!request) throw new Error("bonus request not found");
+  if (request.cierre_estado && request.cierre_estado !== "VERDE") {
+    return { status: "pending", reason: "DOCUMENTACION_NO_VERDE", cierre_estado: request.cierre_estado };
+  }
   if (!request.fecha_venta) return { status: "pending", reason: "FECHA_VENTA_REQUIRED" };
 
   const lookup = await lookupPrice(sql, request.vin, request.fecha_venta);
   if (lookup.status !== "ok") {
+    await persistPriceLookupAudit({
+      requestId,
+      tenantId: request.tenant_id,
+      vin: request.vin,
+      status: lookup.status,
+      evidence: lookup,
+      sql,
+    });
     await sql`
       UPDATE bonus_requests
-      SET price_lookup_status=${lookup.status}, price_lookup_evidence=${jsonb(lookup)}::jsonb, updated_at=now()
+      SET price_lookup_status=${lookup.status}, price_lookup_evidence=null, updated_at=now()
       WHERE id=${requestId}
     `;
     return lookup;
@@ -124,6 +132,15 @@ export async function calculateBonusRequest({ requestId }) {
     componentes_cierre: bonuses.componentes_cierre,
   };
 
+  await persistPriceLookupAudit({
+    requestId,
+    tenantId: request.tenant_id,
+    vin: request.vin,
+    status: "ok",
+    evidence,
+    sql,
+  });
+
   await sql`
     UPDATE bonus_requests SET
       marca=${row.marca}, modelo=${row.modelo}, price_version_id=${row.price_version_id},
@@ -138,7 +155,7 @@ export async function calculateBonusRequest({ requestId }) {
       diferencia_precio=${calculated.bono_dif}, bono_financiamiento=${calculated.bono_fin},
       otro_bono=${calculated.bono_cierre},
       total_devolver=${(calculated.bono_dif ?? 0) + (calculated.bono_cierre ?? 0) + (calculated.bono_fin ?? 0)},
-      price_lookup_status='ok', price_lookup_evidence=${jsonb(evidence)}::jsonb, updated_at=now()
+      price_lookup_status='ok', price_lookup_evidence=null, updated_at=now()
     WHERE id=${requestId}
   `;
 

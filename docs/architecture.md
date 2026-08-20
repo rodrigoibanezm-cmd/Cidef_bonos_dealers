@@ -131,6 +131,13 @@ Si no se resuelve:
 REQUIERE_REVISION_HUMANA
 ```
 
+Implementación:
+
+- `motors/audit_router.js` traduce cada inconsistencia a extractor, campos y contexto.
+- `bonus_document_extraction_audits` conserva cada intento targeted, valores originales y resultado.
+- una corrección se aplica como overlay para el cierre; nunca actualiza la fila full original.
+- la restricción `(tenant_id, vin, issue_code, attempt)` impide superar dos intentos por inconsistencia.
+
 ### Auditor global
 
 Resuelve únicamente inconsistencias entre documentos o roles.
@@ -149,6 +156,8 @@ Tabla de auditoría:
 
 `bonus_operation_identity_audits`
 
+La tabla es append-only: una nueva resolución no reemplaza la evidencia histórica.
+
 La auditoría conserva evidencia y resolución. `bonus_requests` recibe solo el resultado normalizado.
 
 ### Cierre general final
@@ -162,6 +171,8 @@ VERDE    listo para publicación/revisión
 AMARILLO requiere revisión humana
 ROJO     inconsistencia material no resoluble automáticamente
 ```
+
+Además emite `audit_status`. Cuando se agotan los dos intentos o queda una inconsistencia material sin resolver, su valor final es `REQUIERE_REVISION_HUMANA`.
 
 El cierre final es la puerta de entrada a la tabla canónica y al front.
 
@@ -178,6 +189,13 @@ Principio:
 No debe almacenar toda la evidencia de extracción. Solo contiene el estado canónico necesario para operación, cálculo y front.
 
 Debe poder actualizarse por UPSERT cuando llegan documentos posteriores.
+
+`bonus_requests` conserva solo el resultado final. Los intentos, cierres iniciales/finales e identidad quedan respectivamente en:
+
+- `bonus_document_extraction_audits`
+- `bonus_operation_closure_audits`
+- `bonus_operation_identity_audits`
+- `bonus_price_lookup_audits`
 
 ## Cálculo económico
 

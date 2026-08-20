@@ -171,6 +171,20 @@ attempt: 1 | 2
 
 La respuesta targeted se registra como auditoría/corrección y no borra la extracción original.
 
+Contrato implementado:
+
+```txt
+mode: "targeted"
+fields: lista no vacía de campos declarados por ese extractor
+context: objeto con valores de comparación, nunca fuente del dato
+reason: código de inconsistencia
+attempt: 1 | 2
+```
+
+El resultado queda en `bonus_document_extraction_audits`. El cierre usa un overlay en memoria sobre la extracción full; las tablas staging originales no se actualizan con el resultado targeted.
+
+`operation_vin` asocia cada staging con la operación aunque el documento contenga otro VIN o no contenga VIN. Es identidad de enrutamiento, no evidencia extraída del documento.
+
 ## Reglas de retry
 
 - No hay loops abiertos.
@@ -205,3 +219,5 @@ Ejemplo real:
 6. Resuelve comprador final y elimina la inconsistencia.
 
 La extracción original de la FV se conserva intacta; cambia únicamente la interpretación normalizada de la operación.
+
+Regresión automatizada: `tests/surgical_document_audit.test.js`, VIN `LVAV2MAB1TU475796`.

@@ -1,6 +1,11 @@
 import { runDocumentExtraction } from "../lib/run_document_extraction.js";
-import { extractFcChassis, normalizeChassis } from "../lib/extract_fc_chassis.js";
+import { extractFcChassis, normalizeChassis, readFcChassis } from "../lib/extract_fc_chassis.js";
 import { FC_PROMPT_V1 } from "../prompts/fc.js";
+import {
+  EXTRACTION_MODE,
+  runTargetedDocumentExtraction,
+  targetedContract,
+} from "../lib/targeted_document_extraction.js";
 
 const CONTRACT_VERSION = "5";
 
@@ -76,10 +81,59 @@ export async function validateFcVin({ tenantId, fileId, expectedVin = null, file
   };
 }
 
-export async function extractFc({ tenantId, fileId, expectedVin = null, file }) {
+export async function extractFc({
+  tenantId,
+  fileId,
+  expectedVin = null,
+  file,
+  mode = EXTRACTION_MODE.FULL,
+  fields = null,
+  context = null,
+  reason = null,
+  attempt = null,
+}) {
   if (!tenantId) throw new Error("tenantId is required");
   if (!fileId) throw new Error("fileId is required");
   if (!file?.base64 || !file?.mimeType) throw new Error("file is required");
+
+  const contract = targetedContract({ mode, fields, context, reason, attempt, schema: FC_SCHEMA_V1 });
+  if (contract) {
+    const values = {};
+    const remainingFields = contract.fields.filter((field) => field !== "vin");
+    let parseError = false;
+
+    if (contract.fields.includes("vin")) {
+      const chassis = await readFcChassis(file);
+      values.vin = chassis.vin;
+      parseError ||= chassis.parse_error;
+    }
+    if (remainingFields.length) {
+      const extracted = await runTargetedDocumentExtraction({
+        documentType: "FC",
+        prompt: FC_PROMPT_V1,
+        schema: FC_SCHEMA_V1,
+        file,
+        contract: { ...contract, fields: remainingFields },
+      });
+      parseError ||= extracted._parse_error === true;
+      for (const field of remainingFields) values[field] = extracted[field] ?? null;
+    }
+
+    return {
+      tenant_id: tenantId,
+      document_type: "FC",
+      contract_version: CONTRACT_VERSION,
+      file_id: fileId,
+      mode: EXTRACTION_MODE.TARGETED,
+      fields: contract.fields,
+      context: contract.context,
+      reason: contract.reason,
+      attempt: contract.attempt,
+      values,
+      parse_error: parseError,
+      status: parseError ? "PARSE_ERROR" : "OK",
+    };
+  }
 
   const chassis = await extractFcChassis({ file, comparisonVin: expectedVin });
   const expected = normalizeChassis(expectedVin) || null;

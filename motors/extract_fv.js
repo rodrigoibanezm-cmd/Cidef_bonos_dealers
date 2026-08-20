@@ -1,6 +1,11 @@
 import { runDocumentExtraction } from "../lib/run_document_extraction.js";
 import { FV_PROMPT_V1 } from "../prompts/fv.js";
 import { FV_VIN_PROMPT_V1 } from "../prompts/fv_vin.js";
+import {
+  EXTRACTION_MODE,
+  runTargetedDocumentExtraction,
+  targetedContract,
+} from "../lib/targeted_document_extraction.js";
 
 const CONTRACT_VERSION = "4";
 
@@ -50,6 +55,19 @@ function normalizeText(value) {
   return cleaned || null;
 }
 
+function normalizeFields(extracted, fields) {
+  const result = {};
+  for (const field of fields) {
+    const value = extracted[field];
+    if (["vin"].includes(field)) result[field] = normalizeVin(value);
+    else if (["rut_cliente", "rut_facturado", "rut_compra_para", "rut_dealer"].includes(field)) result[field] = normalizeRut(value);
+    else if (["nombre_cliente", "nombre_facturado", "nombre_compra_para", "nombre_dealer"].includes(field)) result[field] = normalizeText(value);
+    else if (field === "financiamiento") result[field] = normalizeText(value)?.toUpperCase() ?? null;
+    else result[field] = value ?? null;
+  }
+  return result;
+}
+
 export async function validateFvVin({ tenantId, fileId, expectedVin, file }) {
   if (!tenantId) throw new Error("tenantId is required");
   if (!fileId) throw new Error("fileId is required");
@@ -69,10 +87,41 @@ export async function validateFvVin({ tenantId, fileId, expectedVin, file }) {
   };
 }
 
-export async function extractFv({ tenantId, fileId, expectedVin = null, file }) {
+export async function extractFv({
+  tenantId,
+  fileId,
+  expectedVin = null,
+  file,
+  mode = EXTRACTION_MODE.FULL,
+  fields = null,
+  context = null,
+  reason = null,
+  attempt = null,
+}) {
   if (!tenantId) throw new Error("tenantId is required");
   if (!fileId) throw new Error("fileId is required");
   if (!file?.base64 || !file?.mimeType) throw new Error("file is required");
+
+  const contract = targetedContract({ mode, fields, context, reason, attempt, schema: FV_SCHEMA_V1 });
+  if (contract) {
+    const extracted = await runTargetedDocumentExtraction({
+      documentType: "FV", prompt: FV_PROMPT_V1, schema: FV_SCHEMA_V1, file, contract,
+    });
+    return {
+      tenant_id: tenantId,
+      document_type: "FV",
+      contract_version: CONTRACT_VERSION,
+      file_id: fileId,
+      mode: EXTRACTION_MODE.TARGETED,
+      fields: contract.fields,
+      context: contract.context,
+      reason: contract.reason,
+      attempt: contract.attempt,
+      values: normalizeFields(extracted, contract.fields),
+      parse_error: extracted._parse_error === true,
+      status: extracted._parse_error === true ? "PARSE_ERROR" : "OK",
+    };
+  }
 
   const extracted = await runDocumentExtraction({ prompt: FV_PROMPT_V1, schema: FV_SCHEMA_V1, file });
   const vinDocumento = normalizeVin(extracted.vin);
