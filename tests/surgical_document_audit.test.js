@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { buildBonusOperationClosure } from "../lib/build_bonus_operation_closure.js";
+import { guardDocumentRouting } from "../lib/document_routing_guard.js";
 import { normalizeOperationIdentity } from "../lib/normalize_operation_identity.js";
 import { auditRouter, planAuditAction } from "../motors/audit_router.js";
 import { targetedContract } from "../lib/targeted_document_extraction.js";
@@ -43,7 +44,7 @@ function regressionDocuments() {
   };
 }
 
-test("regression LVAV2MAB1TU475796 detects, targets and resolves COMPRA_PARA", async () => {
+test("regression LVAV2MAB1TU475796 resolves COMPRA_PARA from staging before targeted extraction", async () => {
   const documents = regressionDocuments();
   const initial = buildBonusOperationClosure({ vin: VIN, documents });
   assert.equal(initial.cierre_estado, "ROJO");
@@ -53,6 +54,7 @@ test("regression LVAV2MAB1TU475796 detects, targets and resolves COMPRA_PARA", a
   const action = planAuditAction(mismatch, documents);
   assert.deepEqual(action.fields, ["nombre_facturado", "rut_facturado", "nombre_compra_para", "rut_compra_para"]);
 
+  let targetedCalls = 0;
   const targeted = await auditRouter({
     tenantId: "dealer_demo",
     vin: VIN,
@@ -60,17 +62,14 @@ test("regression LVAV2MAB1TU475796 detects, targets and resolves COMPRA_PARA", a
     documents,
     sql: null,
     loadAudits: async () => [],
-    runTargetedExtraction: async ({ action: targetedAction, attempt }) => ({
-      contract_version: "4",
-      status: "OK",
-      parse_error: false,
-      attempt,
-      values: Object.fromEntries(targetedAction.fields.map((field) => [field, documents.fv[field]])),
-    }),
+    runTargetedExtraction: async () => {
+      targetedCalls += 1;
+      throw new Error("targeted extraction must not run when staging already resolves identity");
+    },
     persistAudit: async ({ audit }) => ({ ...audit, id: 1 }),
   });
-  assert.equal(targeted.auditResults.length, 1);
-  assert.equal(targeted.auditResults[0].resolutionStatus, "RESOLVED");
+  assert.equal(targetedCalls, 0);
+  assert.equal(targeted.auditResults.length, 0);
   assert.deepEqual(targeted.exhaustedIssues, []);
 
   const identity = normalizeOperationIdentity({ fv: targeted.documents.fv, ins: targeted.documents.ins });
@@ -83,6 +82,28 @@ test("regression LVAV2MAB1TU475796 detects, targets and resolves COMPRA_PARA", a
   assert.equal(final.nombre_cliente, "JOHNSON SOLAR COMPANY LIMITADA");
   assert.equal(final.inconsistencias.includes("INS_RUT_CLIENTE_MISMATCH"), false);
   assert.equal(final.audit_status, "RESUELTO_AUTOMATICAMENTE");
+});
+
+test("routing guard blocks incompatible FV page classification but keeps FC/REPO resolver path", () => {
+  const badFv = guardDocumentRouting({
+    sourceFilename: `${VIN} FV.pdf`,
+    classifiedType: "REPOSICION",
+  });
+  assert.equal(badFv.allowed, false);
+  assert.equal(badFv.sourceHint, "FV");
+
+  const repoAsFc = guardDocumentRouting({
+    sourceFilename: `${VIN} REPO.pdf`,
+    classifiedType: "FC",
+  });
+  assert.equal(repoAsFc.allowed, true);
+  assert.equal(repoAsFc.reason, "FC_REPO_REQUIRES_CHASSIS_RESOLUTION");
+
+  const blankFvPage = guardDocumentRouting({
+    sourceFilename: `${VIN} FV.pdf`,
+    classifiedType: "BASURA",
+  });
+  assert.equal(blankFvPage.allowed, true);
 });
 
 test("targeted contract rejects undeclared fields and attempts over two", () => {
