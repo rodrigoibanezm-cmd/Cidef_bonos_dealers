@@ -60,12 +60,13 @@ export default async function RequestReviewPage({ searchParams }) {
 
   const current = review.documents.find((x) => x.document_type === review.next_document_type) || null;
   const step = current ? review.sequence.indexOf(current.document_type) + 1 : review.sequence.length;
+  const dealerLabel = review.request.dealer_nombre || review.request.dealer_id || "Dealer no identificado";
 
   return (
     <main className={styles.screen}>
       <header className={styles.header}>
         <a className={styles.back} href="/admin-v2">← Volver a activos</a>
-        <div className={styles.topbar}><div><span className={styles.eyebrow}>CIDEF · BONOS DEALERS</span><h1>Revisión · {review.request.vin}</h1><div className={styles.meta}><span>{review.request.tenant_id}</span><span>{review.request.estado}</span><span>{review.review_complete ? "Revisión completa" : `Documento ${step} de ${review.sequence.length}`}</span></div></div></div>
+        <div className={styles.topbar}><div><span className={styles.eyebrow}>CIDEF · BONOS DEALERS</span><h1>Revisión · {review.request.vin}</h1><div className={styles.meta}><span>{dealerLabel}</span><span>{review.request.estado}</span><span>{review.review_complete ? "Revisión completa" : `Documento ${step} de ${review.sequence.length}`}</span></div></div></div>
       </header>
 
       <AuditSummary request={review.request} />
