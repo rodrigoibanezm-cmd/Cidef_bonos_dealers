@@ -21,10 +21,8 @@ async function findFinanciamiento(sql, fv) {
     from bonus_financiamiento_extractions
     where tenant_id = ${fv.tenant_id}
       and regexp_replace(upper(coalesce(rut_cliente,'')), '[^0-9K]', '', 'g') = ${rut}
-    order by
-      case when source_filename = ${fv.source_filename ?? null} then 0 else 1 end,
-      updated_at desc
-    limit 2
+    order by updated_at desc
+    limit 1
   `;
   return rows[0] || null;
 }
@@ -115,6 +113,8 @@ async function consolidateOne(sql, fv) {
     rutDealer: fv.rut_dealer ?? null,
     nombreCliente: fv.nombre_cliente ?? null,
     rutCliente: fv.rut_cliente ?? null,
+    fechaCompra: fc?.fecha_factura_compra ?? null,
+    montoCompra: fc?.precio_compra_total ?? null,
     fechaVenta: fv.fecha_factura_venta ?? null,
     montoVenta: fv.precio_venta_total ?? null,
     marca: ins?.marca ?? fc?.marca ?? null,
@@ -132,23 +132,14 @@ async function consolidateOne(sql, fv) {
   if (existing[0]) {
     const rows = await sql`
       update bonus_requests set
-        source_filename = ${values.sourceFilename},
-        dealer_nombre = ${values.dealerNombre},
-        rut_dealer = ${values.rutDealer},
-        nombre_cliente = ${values.nombreCliente},
-        rut_cliente = ${values.rutCliente},
-        fecha_venta = ${values.fechaVenta},
-        monto_venta = ${values.montoVenta},
-        marca = ${values.marca},
-        modelo = ${values.modelo},
-        ppu = ${values.ppu},
-        anio = ${values.anio},
-        financiamiento = ${values.financiamiento},
-        monto_financiado = ${values.montoFinanciado},
-        numero_operacion_financiamiento = ${values.numeroOperacion},
-        fecha_aprobacion_financiamiento = ${values.fechaAprobacion},
-        vin_reposicion = ${values.vinReposicion},
-        fecha_reposicion = ${values.fechaReposicion},
+        source_filename = ${values.sourceFilename}, dealer_nombre = ${values.dealerNombre}, rut_dealer = ${values.rutDealer},
+        nombre_cliente = ${values.nombreCliente}, rut_cliente = ${values.rutCliente},
+        fecha_compra = ${values.fechaCompra}, monto_compra = ${values.montoCompra},
+        fecha_venta = ${values.fechaVenta}, monto_venta = ${values.montoVenta},
+        marca = ${values.marca}, modelo = ${values.modelo}, ppu = ${values.ppu}, anio = ${values.anio},
+        financiamiento = ${values.financiamiento}, monto_financiado = ${values.montoFinanciado},
+        numero_operacion_financiamiento = ${values.numeroOperacion}, fecha_aprobacion_financiamiento = ${values.fechaAprobacion},
+        vin_reposicion = ${values.vinReposicion}, fecha_reposicion = ${values.fechaReposicion},
         fv_status = ${fvStatus}, fc_status = ${fcStatus}, inscripcion_status = ${insStatus},
         financiamiento_status = ${finStatus}, reposicion_status = ${repoStatus},
         documentacion_estado = ${documentacionEstado}, documentos_completos = ${completa},
@@ -164,35 +155,33 @@ async function consolidateOne(sql, fv) {
   const rows = await sql`
     insert into bonus_requests (
       tenant_id, vin, estado, source_filename, dealer_nombre, rut_dealer,
-      nombre_cliente, rut_cliente, fecha_venta, monto_venta, marca, modelo, ppu, anio,
-      financiamiento, monto_financiado, numero_operacion_financiamiento,
-      fecha_aprobacion_financiamiento, vin_reposicion, fecha_reposicion,
-      fv_status, fc_status, inscripcion_status, financiamiento_status, reposicion_status,
-      documentacion_estado, documentos_completos, documentos_faltantes,
+      nombre_cliente, rut_cliente, fecha_compra, monto_compra, fecha_venta, monto_venta, marca, modelo, ppu, anio,
+      financiamiento, monto_financiado, numero_operacion_financiamiento, fecha_aprobacion_financiamiento,
+      vin_reposicion, fecha_reposicion, fv_status, fc_status, inscripcion_status, financiamiento_status,
+      reposicion_status, documentacion_estado, documentos_completos, documentos_faltantes,
       tiene_inconsistencias, inconsistencias
     ) values (
       ${fv.tenant_id}, ${vin}, 'PENDIENTE', ${values.sourceFilename}, ${values.dealerNombre}, ${values.rutDealer},
-      ${values.nombreCliente}, ${values.rutCliente}, ${values.fechaVenta}, ${values.montoVenta},
-      ${values.marca}, ${values.modelo}, ${values.ppu}, ${values.anio},
-      ${values.financiamiento}, ${values.montoFinanciado}, ${values.numeroOperacion},
-      ${values.fechaAprobacion}, ${values.vinReposicion}, ${values.fechaReposicion},
-      ${fvStatus}, ${fcStatus}, ${insStatus}, ${finStatus}, ${repoStatus},
-      ${documentacionEstado}, ${completa}, ${JSON.stringify(faltantes)}::jsonb,
-      ${requiereCorreccion}, ${JSON.stringify(inconsistencias)}::jsonb
+      ${values.nombreCliente}, ${values.rutCliente}, ${values.fechaCompra}, ${values.montoCompra}, ${values.fechaVenta}, ${values.montoVenta},
+      ${values.marca}, ${values.modelo}, ${values.ppu}, ${values.anio}, ${values.financiamiento}, ${values.montoFinanciado},
+      ${values.numeroOperacion}, ${values.fechaAprobacion}, ${values.vinReposicion}, ${values.fechaReposicion},
+      ${fvStatus}, ${fcStatus}, ${insStatus}, ${finStatus}, ${repoStatus}, ${documentacionEstado}, ${completa},
+      ${JSON.stringify(faltantes)}::jsonb, ${requiereCorreccion}, ${JSON.stringify(inconsistencias)}::jsonb
     ) returning *
   `;
   return rows[0];
 }
 
-export async function consolidateBonusOperations({ tenantId = null } = {}) {
+export async function consolidateBonusOperations({ tenantId = null, vin = null } = {}) {
   const sql = db();
-  const fvs = tenantId
-    ? await sql`select * from bonus_fv_extractions where tenant_id = ${tenantId} and vin is not null order by updated_at asc`
-    : await sql`select * from bonus_fv_extractions where vin is not null order by updated_at asc`;
+  const normalizedVin = normVin(vin);
+  const fvs = tenantId && normalizedVin
+    ? await sql`select * from bonus_fv_extractions where tenant_id = ${tenantId} and upper(vin) = ${normalizedVin} order by updated_at asc`
+    : tenantId
+      ? await sql`select * from bonus_fv_extractions where tenant_id = ${tenantId} and vin is not null order by updated_at asc`
+      : await sql`select * from bonus_fv_extractions where vin is not null order by updated_at asc`;
 
   const results = [];
-  for (const fv of fvs) {
-    results.push(await consolidateOne(sql, fv));
-  }
+  for (const fv of fvs) results.push(await consolidateOne(sql, fv));
   return { processed: fvs.length, operations: results.filter(Boolean) };
 }
