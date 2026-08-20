@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "../../../../lib/db.js";
-import { downloadDriveFile } from "../../../../lib/google_drive.js";
+import { getR2Object } from "../../../../lib/r2.js";
 
 export const runtime = "nodejs";
 
@@ -16,10 +16,10 @@ export async function GET(request) {
     const file = rows[0];
     if (!file?.file_id) return NextResponse.json({ ok: false, error: "Document not found" }, { status: 404 });
 
-    const downloaded = await downloadDriveFile(file.file_id);
-    return new NextResponse(downloaded.buffer, { headers: {
-      "Content-Type": downloaded.mimeType || "application/pdf",
-      "Content-Disposition": `inline; filename="${file.file_name || downloaded.name || "documento"}"`,
+    const object = await getR2Object(file.file_id);
+    return new NextResponse(object.buffer, { headers: {
+      "Content-Type": object.contentType || "image/jpeg",
+      "Content-Disposition": `inline; filename="${file.file_name || "documento.jpg"}"`,
       "Cache-Control": "private, max-age=300",
     }});
   } catch (error) {
