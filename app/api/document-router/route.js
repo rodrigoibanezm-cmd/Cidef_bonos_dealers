@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { classifyDocumentFromR2 } from "../../../lib/document_router.js";
 import { getR2Object } from "../../../lib/r2.js";
 import { persistFcExtraction } from "../../../lib/persist_fc_extraction.js";
-import { extractFc, validateFcVin } from "../../../motors/extract_fc.js";
+import { extractFc } from "../../../motors/extract_fc.js";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -47,23 +47,17 @@ export async function POST(request) {
     const tenantId = tenantFromKey(key);
     const sourceVin = vinFromSourceFilename(sourceFilename);
 
-    if (!sourceVin) {
-      console.log(`[FC_EXTRACT_SKIP] archivo=${key} source=${sourceFilename ?? "null"} motivo=SOURCE_VIN_REQUIRED`);
-      return NextResponse.json({ ok: true, key, ...result, document_type: "FC", extraction: null, warning: "SOURCE_VIN_REQUIRED" });
-    }
+    const extraction = await extractFc({
+      tenantId,
+      fileId: key,
+      expectedVin: sourceVin,
+      file,
+    });
 
-    const vinCheck = await validateFcVin({ tenantId, fileId: key, expectedVin: sourceVin, file });
-    console.log(`[FC_ROUTE] archivo=${key} source=${sourceFilename ?? "null"} source_vin=${sourceVin} doc_vin=${vinCheck?.vin_documento ?? "null"} vin_match=${vinCheck.vin_match}`);
-
-    if (!vinCheck.vin_match) {
-      console.log(`[FC_EXTRACT_SKIP] archivo=${key} motivo=VIN_MISMATCH_OR_UNREADABLE`);
-      return NextResponse.json({ ok: true, key, ...result, document_type: "FC", extraction: vinCheck, persisted: null });
-    }
-
-    const extraction = await extractFc({ tenantId, fileId: key, expectedVin: sourceVin, file });
     extraction.source_filename = sourceFilename;
     const persisted = await persistFcExtraction(extraction);
 
+    console.log(`[FC_ROUTE] archivo=${key} source=${sourceFilename ?? "null"} source_vin=${sourceVin ?? "null"} doc_vin=${extraction?.vin_documento ?? "null"} status=${extraction.status}`);
     console.log(`[FC_EXTRACT] archivo=${key} source=${sourceFilename ?? "null"} resultado=${JSON.stringify(extraction)}`);
     console.log(`[FC_DB] archivo=${key} id=${persisted?.id ?? "null"} status=${persisted?.status ?? "null"}`);
 
