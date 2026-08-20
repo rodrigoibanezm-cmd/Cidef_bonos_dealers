@@ -1,4 +1,5 @@
 import { db } from "../lib/db.js";
+import { auditBonusOperationIdentity } from "./audit_bonus_operation_identity.js";
 import {
   REVIEW_STATUS,
   documentReviewStatus,
@@ -13,13 +14,13 @@ function normVin(value) {
   return String(value || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
 }
 
-async function findFinanciamiento(sql, fv) {
-  if (!fv?.rut_cliente) return null;
-  const rut = normRut(fv.rut_cliente);
+async function findFinanciamiento(sql, tenantId, rutCliente) {
+  if (!rutCliente) return null;
+  const rut = normRut(rutCliente);
   const rows = await sql`
     select *
     from bonus_financiamiento_extractions
-    where tenant_id = ${fv.tenant_id}
+    where tenant_id = ${tenantId}
       and regexp_replace(upper(coalesce(rut_cliente,'')), '[^0-9K]', '', 'g') = ${rut}
     order by updated_at desc
     limit 1
@@ -56,20 +57,34 @@ async function consolidateOne(sql, fv) {
   `;
   const ins = insRows[0] || null;
 
+  const identityAudit = await auditBonusOperationIdentity({
+    tenantId: fv.tenant_id,
+    vin,
+    fv,
+    ins,
+    sql,
+  });
+  const normalizedNombreCliente = identityAudit.nombre_cliente ?? fv.nombre_cliente ?? null;
+  const normalizedRutCliente = identityAudit.rut_cliente ?? fv.rut_cliente ?? null;
+
   const repoRows = await sql`
     select * from bonus_reposicion_extractions
     where tenant_id = ${fv.tenant_id} and upper(vin_original) = ${vin}
     order by updated_at desc limit 1
   `;
   const repo = repoRows[0] || null;
-  const fin = await findFinanciamiento(sql, fv);
+  const fin = await findFinanciamiento(sql, fv.tenant_id, normalizedRutCliente);
   const fc = await findFc(sql, fv, vin);
 
   const inconsistencias = [];
   if (fc?.vin && normVin(fc.vin) !== vin) inconsistencias.push("FC_VIN_MISMATCH");
   if (ins?.vin && normVin(ins.vin) !== vin) inconsistencias.push("INS_VIN_MISMATCH");
-  if (ins?.rut_adquirente && fv.rut_cliente && normRut(ins.rut_adquirente) !== normRut(fv.rut_cliente)) inconsistencias.push("INS_RUT_CLIENTE_MISMATCH");
-  if (fin?.rut_cliente && fv.rut_cliente && normRut(fin.rut_cliente) !== normRut(fv.rut_cliente)) inconsistencias.push("FIN_RUT_CLIENTE_MISMATCH");
+  if (identityAudit.status === "UNRESOLVED") {
+    inconsistencias.push(`CLIENT_IDENTITY:${identityAudit.reason || "UNRESOLVED"}`);
+  }
+  if (fin?.rut_cliente && normalizedRutCliente && normRut(fin.rut_cliente) !== normRut(normalizedRutCliente)) {
+    inconsistencias.push("FIN_RUT_CLIENTE_MISMATCH");
+  }
   if (repo?.vin_original && normVin(repo.vin_original) !== vin) inconsistencias.push("REPO_VIN_ORIGINAL_MISMATCH");
   if (repo?.vin_nuevo && normVin(repo.vin_nuevo) === vin) inconsistencias.push("REPO_VIN_NUEVO_EQUALS_ORIGINAL");
 
@@ -111,8 +126,8 @@ async function consolidateOne(sql, fv) {
     sourceFilename: fv.source_filename ?? null,
     dealerNombre: fv.nombre_dealer ?? null,
     rutDealer: fv.rut_dealer ?? null,
-    nombreCliente: fv.nombre_cliente ?? null,
-    rutCliente: fv.rut_cliente ?? null,
+    nombreCliente: normalizedNombreCliente,
+    rutCliente: normalizedRutCliente,
     fechaCompra: fc?.fecha_factura_compra ?? null,
     montoCompra: fc?.precio_compra_total ?? null,
     fechaVenta: fv.fecha_factura_venta ?? null,
