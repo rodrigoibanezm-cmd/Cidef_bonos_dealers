@@ -20,6 +20,10 @@ function money(value) {
   return Number.isFinite(number) ? `$ ${Math.trunc(number).toLocaleString("es-CL")}` : "-";
 }
 
+function dealerLabel(row) {
+  return row.dealer_nombre || "Dealer no identificado";
+}
+
 function KPIBar({ kpis }) {
   const items = [
     ["◫", kpis.total_mes ?? 0, "Aprobadas mes"],
@@ -51,7 +55,7 @@ function SummaryTable({ rows }) {
     {rows.map((row) => <tr key={row.id}>
       <td><strong>{row.vin || "-"}</strong></td>
       <td><span className={styles.vehicle}>{row.marca || "-"}<small>{row.modelo || "Modelo no disponible"}</small></span></td>
-      <td>{row.dealer_nombre || row.tenant_id || "-"}</td>
+      <td>{dealerLabel(row)}</td>
       <td>{dateLabel(row.fecha_ingreso)}</td>
       <td><strong>{money(row.total_devolver)}</strong></td>
       <td><StatusPill row={row} /></td>
@@ -65,7 +69,7 @@ function ExtendedTable({ rows }) {
   return <section className={`${styles.surface} ${styles.extendedSurface}`}><table className={`${styles.table} ${styles.extendedTable}`}><thead><tr>
     <th>Dealer</th><th>VIN</th><th>Marca</th><th>Modelo</th><th>Cliente</th><th>RUT</th><th>F. compra</th><th>Compra</th><th>F. venta</th><th>Venta</th><th>Días stock</th><th>PDV</th><th>FC</th><th>FV</th><th>INS</th><th>REPO</th><th>Carta</th><th>Bono dif.</th><th>Bono cierre</th><th>Bono fin.</th><th>Total</th><th>Cierre</th><th>Estado</th><th></th>
   </tr></thead><tbody>{rows.map((row) => <tr key={row.id}>
-    <td>{row.dealer_nombre || row.tenant_id || "-"}</td><td><strong>{row.vin || "-"}</strong></td><td>{row.marca || "-"}</td><td>{row.modelo || "-"}</td><td>{row.nombre_cliente || "-"}</td><td>{row.rut_cliente || "-"}</td><td>{dateLabel(row.fecha_compra)}</td><td>{money(row.monto_compra)}</td><td>{dateLabel(row.fecha_venta)}</td><td>{money(row.monto_venta)}</td><td>{row.dias_stock_dealer ?? "-"}</td><td>{row.pdv_ok || "-"}</td><td>{row.fac_compra_ok || "-"}</td><td>{row.fac_venta_ok || "-"}</td><td>{row.inscripcion_venta_ok || "-"}</td><td>{row.fac_reposicion_ok || "-"}</td><td>{row.carta_credito_ok || "-"}</td><td>{money(row.bono_dif)}</td><td>{money(row.bono_cierre)}</td><td>{money(row.bono_fin)}</td><td><strong>{money(row.total_devolver)}</strong></td><td>{row.cierre_estado || "-"}</td><td><StatusPill row={row} /></td><td><a className={styles.entry} href={`/admin-v2/request?id=${encodeURIComponent(row.id)}`}>Revisar →</a></td>
+    <td>{dealerLabel(row)}</td><td><strong>{row.vin || "-"}</strong></td><td>{row.marca || "-"}</td><td>{row.modelo || "-"}</td><td>{row.nombre_cliente || "-"}</td><td>{row.rut_cliente || "-"}</td><td>{dateLabel(row.fecha_compra)}</td><td>{money(row.monto_compra)}</td><td>{dateLabel(row.fecha_venta)}</td><td>{money(row.monto_venta)}</td><td>{row.dias_stock_dealer ?? "-"}</td><td>{row.pdv_ok || "-"}</td><td>{row.fac_compra_ok || "-"}</td><td>{row.fac_venta_ok || "-"}</td><td>{row.inscripcion_venta_ok || "-"}</td><td>{row.fac_reposicion_ok || "-"}</td><td>{row.carta_credito_ok || "-"}</td><td>{money(row.bono_dif)}</td><td>{money(row.bono_cierre)}</td><td>{money(row.bono_fin)}</td><td><strong>{money(row.total_devolver)}</strong></td><td>{row.cierre_estado || "-"}</td><td><StatusPill row={row} /></td><td><a className={styles.entry} href={`/admin-v2/request?id=${encodeURIComponent(row.id)}`}>Revisar →</a></td>
   </tr>)}</tbody></table></section>;
 }
 
