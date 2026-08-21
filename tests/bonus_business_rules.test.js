@@ -12,6 +12,7 @@ import {
   buildBonusBusinessRuleInput,
 } from "../lib/bonus_business_rule_inputs.js";
 import { extractPriceBonuses } from "../lib/price_bonus_payload.js";
+import { assertBonusRequestCalculationReady } from "../lib/approval_workflow.js";
 
 function validInput(overrides = {}) {
   return {
@@ -152,10 +153,11 @@ test("LGJE1EE09TM494653 produces $700,000 when the independent dealer discount i
   assert.equal(result.bono_cierre, 500_000);
   assert.equal(result.bono_fin, 200_000);
   assert.equal(result.total_deterministico, 700_000);
+  assert.equal(result.total_devolver, 700_000);
   assert.equal(result.calculation_status, "OK");
 });
 
-test("historical closure override never replaces the list bonus and requires review", () => {
+test("historical closure difference is not inferred as an override and requires review", () => {
   const result = calculateBonusBusinessRules(validInput({
     monto_compra: 11_950_800,
     precio_venta: 10_890_000,
@@ -166,10 +168,26 @@ test("historical closure override never replaces the list bonus and requires rev
     descuentos_dealer: 1_000_000,
     fecha_compra: "2026-02-28",
     fecha_venta: "2026-03-10",
+    bono_cierre_historico: 300_000,
+  }));
+
+  assert.equal(result.bono_cierre_override, null);
+  assert.equal(result.bono_cierre_historico, 300_000);
+  assert.equal(result.bono_cierre_efectivo, 500_000);
+  assert.equal(result.bono_cierre, 500_000);
+  assert.equal(result.total_deterministico, 700_000);
+  assert.equal(result.total_devolver, null);
+  assert.equal(result.calculation_status, "REQUIERE_REVISION");
+  assert.deepEqual(result.review_reasons, ["BONO_CIERRE_HISTORICO_DIFIERE_DE_LISTA"]);
+});
+
+test("authorized manual closure override remains explicit and still requires review when it differs", () => {
+  const result = calculateBonusBusinessRules(validInput({
+    bono_cierre_venta: 500_000,
     bono_cierre_override: {
       monto: 300_000,
-      motivo: "Valor histórico observado",
-      fuente_autorizacion: "Planilla revisada",
+      motivo: "Excepción comercial",
+      fuente_autorizacion: "Gerencia comercial",
       actor: "auditor-negocio",
       fecha: "2026-03-31",
     },
@@ -178,10 +196,8 @@ test("historical closure override never replaces the list bonus and requires rev
   assert.equal(result.bono_cierre_override, 300_000);
   assert.equal(result.bono_cierre_override_completo, true);
   assert.equal(result.bono_cierre_efectivo, 500_000);
-  assert.equal(result.bono_cierre, 500_000);
-  assert.equal(result.total_deterministico, 700_000);
   assert.equal(result.calculation_status, "REQUIERE_REVISION");
-  assert.deepEqual(result.review_reasons, ["BONO_CIERRE_OVERRIDE_REQUIERE_REVISION"]);
+  assert.equal(result.total_devolver, null);
 });
 
 test("manual closure override without authorization metadata cannot be approved", () => {
@@ -234,6 +250,32 @@ test("positive dealer residual remains diagnostic and never fabricates PDV_OK", 
   assert.equal(result.bono_cierre, null);
   assert.equal(result.bono_fin, null);
   assert.equal(result.calculation_status, "PENDIENTE");
+  assert.equal(result.total_devolver, null);
+});
+
+test("pending economic review survives recalculation and keeps total_devolver null", () => {
+  const input = validInput({ revision_pendiente: true });
+  const result = calculateBonusBusinessRules(input);
+
+  assert.equal(result.pdv_ok, "OK");
+  assert.equal(result.total_deterministico, 1_184_000);
+  assert.equal(result.calculation_status, "REQUIERE_REVISION");
+  assert.equal(result.total_devolver, null);
+  assert.ok(result.review_reasons.includes("REVISION_HUMANA_PENDIENTE"));
+});
+
+test("final approval rejects pending or incomplete economic calculations", () => {
+  assert.throws(
+    () => assertBonusRequestCalculationReady({ requiere_revision_humana: true, pdv_ok: "OK", total_devolver: 700_000 }),
+    /requires human resolution/,
+  );
+  assert.throws(
+    () => assertBonusRequestCalculationReady({ requiere_revision_humana: false, pdv_ok: "", total_devolver: null }),
+    /Economic calculation must be complete/,
+  );
+  assert.doesNotThrow(
+    () => assertBonusRequestCalculationReady({ requiere_revision_humana: false, pdv_ok: "OK", total_devolver: 700_000 }),
+  );
 });
 
 test("BONO_CIERRE returns K only with P/Q/R/S/T OK and 1 < V < 91", () => {

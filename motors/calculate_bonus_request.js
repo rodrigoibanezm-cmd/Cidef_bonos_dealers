@@ -9,16 +9,6 @@ function normalize(value) {
   return String(value || "").trim().toUpperCase();
 }
 
-function historicalClosureOverride(request, bonoCierreLista) {
-  if (request?.bono_cierre_venta === null || request?.bono_cierre_venta === undefined) return null;
-  const historicalAmount = Number(request.bono_cierre_venta);
-  if (!Number.isFinite(historicalAmount) || historicalAmount === bonoCierreLista) return null;
-
-  // The current schema does not preserve the mandatory authorization metadata.
-  // A differing historical value is therefore detectable, but not approvable.
-  return { monto: historicalAmount };
-}
-
 async function lookupPrice(sql, vin, fecha) {
   const inventoryRows = await sql`
     SELECT vin_chasis, marca, desc_abrev, tipo_motor, norma
@@ -68,7 +58,11 @@ async function lookupPrice(sql, vin, fecha) {
   };
 }
 
-export async function calculateBonusRequest({ requestId }) {
+export async function calculateBonusRequest({
+  requestId,
+  descuentosDealerEvidence = null,
+  bonoCierreOverride = null,
+}) {
   if (!requestId) throw new Error("requestId is required");
   const sql = db();
   const requests = await sql`SELECT * FROM bonus_requests WHERE id = ${requestId} LIMIT 1`;
@@ -100,16 +94,16 @@ export async function calculateBonusRequest({ requestId }) {
   const row = lookup.row;
   const bonuses = extractPriceBonuses(row);
   const precioLista = priceListValue(row);
-  const bonoCierreOverride = historicalClosureOverride(request, bonuses.bono_cierre_lista);
-  // The current pipeline has no independent evidence source for XLS column L.
-  // Never reuse the existing bonus_requests value: older runs populated it by
-  // solving the PDV equation, which would make PDV_OK true by construction.
+  // Never treat the previous canonical list value as a manual override. A
+  // difference is review evidence, while an override must arrive explicitly
+  // with its authorization metadata.
   const ruleInput = buildBonusBusinessRuleInput({
     request,
     precioLista,
     bonuses,
-    descuentosDealerEvidence: null,
+    descuentosDealerEvidence,
     bonoCierreOverride,
+    bonoCierreHistorico: request.bono_cierre_venta,
   });
   const calculated = calculateBonusBusinessRules(ruleInput);
   const flags = {
@@ -120,7 +114,7 @@ export async function calculateBonusRequest({ requestId }) {
     carta_credito_ok: ruleInput.carta_credito_ok,
   };
   const totalDeterministico = calculated.total_deterministico;
-  const totalDevolver = calculated.calculation_status === "OK" ? totalDeterministico : null;
+  const totalDevolver = calculated.total_devolver;
 
   const evidence = {
     inventory: {
@@ -142,6 +136,7 @@ export async function calculateBonusRequest({ requestId }) {
     regla_calculo: calculated.rule_version,
     bono_cierre_lista: calculated.bono_cierre_lista,
     bono_cierre_override: calculated.bono_cierre_override,
+    bono_cierre_historico: calculated.bono_cierre_historico,
     descuento_dealer_residual: calculated.descuento_dealer_residual,
     descuento_dealer_aprobado: calculated.descuento_dealer_aprobado,
     calculation_status: calculated.calculation_status,

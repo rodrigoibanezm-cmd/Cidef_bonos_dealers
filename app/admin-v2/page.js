@@ -35,6 +35,7 @@ function pendingReason(row) {
   if (row.estado === "PAGADA") return "Pagada: la OT ya salió del flujo activo.";
   if (row.estado === "APROBADA") return "Aprobada por CIDEF; pendiente de pago.";
   if (row.estado === "EN_REVISION") return "Revisión humana iniciada; faltan documentos o cierre final por aprobar.";
+  if (row.requiere_revision_humana) return "Requiere revisión humana por una inconsistencia documental o económica.";
   if (row.cierre_estado === "VERDE") return "Auditoría automática conforme. Pendiente de revisión y aprobación humana de los documentos.";
   if (row.cierre_estado === "AMARILLO") return `Pendiente con observaciones: ${Array.isArray(row.inconsistencias) && row.inconsistencias.length ? row.inconsistencias.join(", ") : row.audit_status || "requiere revisión humana"}.`;
   if (row.cierre_estado === "ROJO") return `Bloqueada por auditoría: ${Array.isArray(row.inconsistencias) && row.inconsistencias.length ? row.inconsistencias.join(", ") : row.audit_status || "hay inconsistencias"}.`;
@@ -43,7 +44,11 @@ function pendingReason(row) {
 
 function StatusPill({ row }) {
   const state = row.estado === "PAGADA" ? "PAGADA" : row.estado_cola;
-  const cls = state === "URGENTE" || row.cierre_estado === "ROJO" ? styles.pillRed : row.cierre_estado === "VERDE" ? styles.pillGreen : styles.pillYellow;
+  const cls = state === "URGENTE" || row.cierre_estado === "ROJO"
+    ? styles.pillRed
+    : row.requiere_revision_humana || row.cierre_estado === "AMARILLO"
+      ? styles.pillYellow
+      : row.cierre_estado === "VERDE" ? styles.pillGreen : styles.pillYellow;
   return <span className={`${styles.pill} ${cls}`} title={pendingReason(row)}>{state || "PENDIENTE"}</span>;
 }
 

@@ -174,14 +174,20 @@ Los conceptos se mantienen separados:
 
 ```txt
 bono_cierre_lista    = price_history.bono_mes
-bono_cierre_override = monto manual conocido, si existe
+bono_cierre_historico = valor previo observado, si existe
+bono_cierre_override = monto manual explícito, si existe
 bono_cierre_efectivo = bono_cierre_lista mientras el override no sea aprobado
 ```
 
-El motor nunca infiere un override desde el residual económico. Un override
+Una diferencia histórica se registra como discrepancia y no se convierte en
+override. El motor nunca infiere un override desde el residual económico. Un override
 manual exige monto, motivo, fuente/autorización, actor y fecha. Si el valor
 histórico/manual difiere de la lista, el cálculo queda `REQUIERE_REVISION` y el
 override no sustituye automáticamente el valor de lista.
+
+Mientras exista una revisión humana pendiente, una recalculación conserva
+`total_devolver = null`. La aprobación final exige `PDV_OK = OK`, un total
+calculado y ausencia de revisiones pendientes.
 
 ## BONO_FIN
 
@@ -257,9 +263,9 @@ BONO_FIN = $600.000 / 3 = $200.000
 TOTAL_DETERMINISTICO = $700.000
 ```
 
-La planilla histórica contiene `bono_cierre = $300.000`. Esa diferencia se trata
-como override manual no reproducible y deja la operación `REQUIERE_REVISION`; no
-reemplaza automáticamente los $500.000 provenientes de la lista.
+La planilla histórica contiene `bono_cierre = $300.000`. Esa diferencia se registra
+como discrepancia histórica y deja la operación `REQUIERE_REVISION`; no se infiere
+un override ni se reemplazan automáticamente los $500.000 provenientes de la lista.
 
 Caso de regresión documental:
 
