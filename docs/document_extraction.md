@@ -60,6 +60,10 @@ LVAV2MAB1TU475796 FC.pdf
 Chassis correcto: LVAV2MAB1TU475796
 ```
 
+Si el dealer no aporta FC y no existe una fila en `bonus_fc_extractions`, la consolidación puede reconstruir evidencia interna desde `inventario_vehiculos_global_raw`. Sólo aplica cuando existe una única fila con VIN exacto, `es_dealer=true`, dealer consistente con la FV y factura, fecha, monto con IVA, nota de venta, marca y modelo completos.
+
+La reconstrucción mantiene `source=INVENTARIO`, `documento_original=false` y `fc_reconstruida=true`. No se inserta en staging ni se materializa como archivo. El cierre append-only registra `FC_NO_APORTADA_POR_DEALER` y `FC_RECONSTRUIDA_DESDE_INVENTARIO` como señales informativas. Si falta un campo esencial, hay más de una fila o existe una inconsistencia, FC continúa en estado `FALTA`.
+
 ### INSCRIPCION
 
 Se usa como evidencia registral del vehículo y adquirente.
