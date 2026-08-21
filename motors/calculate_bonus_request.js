@@ -1,5 +1,6 @@
 import { db } from "../lib/db.js";
 import { calculateBonusBusinessRules } from "../lib/bonus_business_rules.js";
+import { buildBonusBusinessRuleInput } from "../lib/bonus_business_rule_inputs.js";
 import { extractPriceBonuses, priceListValue } from "../lib/price_bonus_payload.js";
 import { rankPriceVersions } from "../lib/price_version_match.js";
 import { persistPriceLookupAudit } from "../lib/persist_price_lookup_audit.js";
@@ -57,7 +58,11 @@ async function lookupPrice(sql, vin, fecha) {
   };
 }
 
-export async function calculateBonusRequest({ requestId }) {
+export async function calculateBonusRequest({
+  requestId,
+  descuentosDealerEvidence = null,
+  bonoCierreOverride = null,
+}) {
   if (!requestId) throw new Error("requestId is required");
   const sql = db();
   const requests = await sql`SELECT * FROM bonus_requests WHERE id = ${requestId} LIMIT 1`;
@@ -89,29 +94,27 @@ export async function calculateBonusRequest({ requestId }) {
   const row = lookup.row;
   const bonuses = extractPriceBonuses(row);
   const precioLista = priceListValue(row);
-  const descuentosDealer = request.monto_venta === null || precioLista === null
-    ? null
-    : precioLista - bonuses.bono_fin_venta - bonuses.bono_cierre_venta - bonuses.bono_cidef - Number(request.monto_venta);
-
-  const flags = {
-    fac_compra_ok: request.fc_status === "OK" ? "OK" : "",
-    fac_venta_ok: request.fv_status === "OK" ? "OK" : "",
-    inscripcion_venta_ok: request.inscripcion_status === "OK" ? "OK" : "",
-    fac_reposicion_ok: request.reposicion_status === "OK" ? "OK" : "",
-    carta_credito_ok: request.financiamiento_status === "OK" ? "OK" : "",
-  };
-
-  const calculated = calculateBonusBusinessRules({
-    precio_venta: request.monto_venta,
-    precio_lista_venta: precioLista,
-    bono_cidef: bonuses.bono_cidef,
-    bono_fin_venta: bonuses.bono_fin_venta,
-    bono_cierre_venta: bonuses.bono_cierre_venta,
-    descuentos_dealer: descuentosDealer,
-    fecha_compra: request.fecha_compra,
-    fecha_venta: request.fecha_venta,
-    ...flags,
+  // Never treat the previous canonical list value as a manual override. A
+  // difference is review evidence, while an override must arrive explicitly
+  // with its authorization metadata.
+  const ruleInput = buildBonusBusinessRuleInput({
+    request,
+    precioLista,
+    bonuses,
+    descuentosDealerEvidence,
+    bonoCierreOverride,
+    bonoCierreHistorico: request.bono_cierre_venta,
   });
+  const calculated = calculateBonusBusinessRules(ruleInput);
+  const flags = {
+    fac_compra_ok: ruleInput.fac_compra_ok,
+    fac_venta_ok: ruleInput.fac_venta_ok,
+    inscripcion_venta_ok: ruleInput.inscripcion_venta_ok,
+    fac_reposicion_ok: ruleInput.fac_reposicion_ok,
+    carta_credito_ok: ruleInput.carta_credito_ok,
+  };
+  const totalDeterministico = calculated.total_deterministico;
+  const totalDevolver = calculated.total_devolver;
 
   const evidence = {
     inventory: {
@@ -130,6 +133,14 @@ export async function calculateBonusRequest({ requestId }) {
     match_score: lookup.score,
     match_reasons: lookup.match_reasons,
     componentes_cierre: bonuses.componentes_cierre,
+    regla_calculo: calculated.rule_version,
+    bono_cierre_lista: calculated.bono_cierre_lista,
+    bono_cierre_override: calculated.bono_cierre_override,
+    bono_cierre_historico: calculated.bono_cierre_historico,
+    descuento_dealer_residual: calculated.descuento_dealer_residual,
+    descuento_dealer_aprobado: calculated.descuento_dealer_aprobado,
+    calculation_status: calculated.calculation_status,
+    review_reasons: calculated.review_reasons,
   };
 
   await persistPriceLookupAudit({
@@ -146,7 +157,7 @@ export async function calculateBonusRequest({ requestId }) {
       marca=${row.marca}, modelo=${row.modelo}, price_version_id=${row.price_version_id},
       lista_precio_utilizada=${row.source_file}, precio_lista_venta=${precioLista},
       bono_cidef=${bonuses.bono_cidef}, bono_fin_venta=${bonuses.bono_fin_venta},
-      bono_cierre_venta=${bonuses.bono_cierre_venta}, descuentos_dealer=${descuentosDealer},
+      bono_cierre_venta=${bonuses.bono_cierre_venta}, descuentos_dealer=${ruleInput.descuentos_dealer},
       fac_compra_ok=${flags.fac_compra_ok}, fac_venta_ok=${flags.fac_venta_ok},
       inscripcion_venta_ok=${flags.inscripcion_venta_ok}, fac_reposicion_ok=${flags.fac_reposicion_ok},
       carta_credito_ok=${flags.carta_credito_ok}, pdv_ok=${calculated.pdv_ok},
@@ -154,10 +165,26 @@ export async function calculateBonusRequest({ requestId }) {
       bono_cierre=${calculated.bono_cierre}, bono_fin=${calculated.bono_fin},
       diferencia_precio=${calculated.bono_dif}, bono_financiamiento=${calculated.bono_fin},
       otro_bono=${calculated.bono_cierre},
-      total_devolver=${(calculated.bono_dif ?? 0) + (calculated.bono_cierre ?? 0) + (calculated.bono_fin ?? 0)},
+      total_devolver=${totalDevolver},
+      requiere_revision_humana=case
+        when ${calculated.calculation_status}='REQUIERE_REVISION' then true
+        else requiere_revision_humana
+      end,
       price_lookup_status='ok', price_lookup_evidence=null, updated_at=now()
     WHERE id=${requestId}
   `;
 
-  return { status: "ok", request_id: requestId, ...bonuses, ...flags, ...calculated, evidence };
+  return {
+    status: calculated.calculation_status === "OK" ? "ok" : "pending",
+    reason: calculated.calculation_status === "REQUIERE_REVISION"
+      ? "BONO_CIERRE_OVERRIDE_REQUIERE_REVISION"
+      : calculated.pdv_ok === "OK" ? null : "DESCUENTO_DEALER_EVIDENCE_REQUIRED",
+    request_id: requestId,
+    ...bonuses,
+    ...flags,
+    ...calculated,
+    total_deterministico: totalDeterministico,
+    total_devolver: totalDevolver,
+    evidence,
+  };
 }
