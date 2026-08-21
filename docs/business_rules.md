@@ -6,20 +6,29 @@ Estas reglas replican la lógica del archivo Excel utilizado actualmente por CID
 
 ## Variables de referencia
 
-Para mantener correspondencia con el XLS original:
+Correspondencia confirmada directamente contra los encabezados de la hoja `DETALLE`
+del XLS operacional:
 
 ```txt
-E = monto/precio de compra usado por la planilla
-F = PDV / valor que se valida
-H = precio de referencia/lista
-I = descuento dealer
-J = bono financiamiento venta
-K = bono cierre venta
-L = otro descuento/bono considerado por la planilla
-M = fecha compra
-N = fecha venta
-P,Q,R,S,T,U = validaciones documentales
-V = días de stock
+E = PRECIO DE COMPRA        → monto_compra
+F = PRECIO DE VENTA         → monto_venta / precio_venta
+H = PRECIO DE LISTA VTA     → precio_lista_venta
+I = BONO CIDEF              → bono_cidef
+J = BONO FIN VTA            → bono_fin_venta
+K = BONO CIERRE VTA         → bono_cierre_venta
+L = DESCUENTOS DEALER       → descuentos_dealer
+M = FECHA DE COMPRA         → fecha_compra
+N = FECHA DE VENTA          → fecha_venta
+P = FAC COMPRA              → fac_compra_ok
+Q = FAC VTA                 → fac_venta_ok
+R = PDV OK                  → pdv_ok
+S = INSCRIPCION VTA         → inscripcion_venta_ok
+T = FAC REPOSICION          → fac_reposicion_ok
+U = CARTA DE CREDITO        → carta_credito_ok
+V = DIAS DE STOCK           → dias_stock_dealer
+W = BONO DIF                → bono_dif
+X = BONO CIERRE             → bono_cierre
+Y = BONO FIN                → bono_fin
 ```
 
 La implementación debe mapear estos conceptos a campos canónicos, pero conservar exactamente la misma lógica matemática.
@@ -41,6 +50,8 @@ si no → ""
 ```
 
 No se debe introducir tolerancia matemática salvo que negocio la defina explícitamente.
+`L = DESCUENTOS DEALER` debe provenir de evidencia independiente. No se puede
+despejar `L = H - J - K - I - F` y reutilizarlo para aprobar la misma igualdad.
 
 ## DIAS_STOCK
 
@@ -87,7 +98,10 @@ base = E - ((H - I) * 0.92)
 BONO_DIF = max(0, base)
 ```
 
-Si no se cumplen las condiciones, queda vacío.
+El valor matemático de `base` requiere solamente `E`, `H` e `I`; no depende de
+`L = descuentos_dealer`. Si no se cumplen las condiciones P/Q/R/S/T y stock,
+la celda pagable `BONO_DIF` queda vacía aunque esa base matemática se pueda
+calcular para diagnóstico.
 
 `BONO_DIF` corresponde a diferencia de precio; conceptualmente no es un bono comercial y debe mantenerse separado en la información económica.
 
@@ -170,11 +184,14 @@ Para calcular los bonos de venta:
    - bono mes/cierre
 5. Ejecutar las fórmulas anteriores.
 
-Caso validado:
+Caso de regresión documental:
 
 ```txt
 VIN: LVAV2MAB5TU475588
+Compra (FC): 31-03-2026
+Precio compra (E): $15.799.511
 Venta: 11-06-2026
+Precio venta (F): $15.000.000
 Versión: FOTON G7 LITE 2.0 MT 4X4
 Lista utilizada: 03-06-2026
 Precio lista: $15.490.000
@@ -183,18 +200,25 @@ Bono Forum: $600.000
 Bono cierre: $100.000
 ```
 
-Resultado validado del motor:
+Con la fórmula correcta, el valor matemático es:
 
 ```txt
-PDV_OK = OK
 DIAS_STOCK = 72
-BONO_DIF = $1.577.200
-BONO_CIERRE = $100.000
-BONO_FIN = $200.000
-TOTAL_DEVOLVER = $1.877.200
+BONO_DIF_MATEMATICO
+= $15.799.511 - (($15.490.000 - $900.000) * 0,92)
+= $2.376.711
 ```
 
-Este caso debe mantenerse como prueba de regresión de cálculo.
+El XLS adjunto es una plantilla sin filas operacionales y los documentos/staging
+actuales no aportan una fuente canónica independiente para `L = DESCUENTOS DEALER`.
+Por eso `PDV_OK` queda indeterminado y `BONO_DIF`, `BONO_CIERRE`, `BONO_FIN` y
+`TOTAL_DEVOLVER` no son pagables todavía.
+
+El valor legado `descuentos_dealer = -$1.110.000` no es evidencia: coincide
+exactamente con el antiguo despeje `H - J - K - I - F`. El total histórico
+`$1.877.200` también corresponde al cálculo anterior que usaba erróneamente
+`F = $15.000.000` en BONO_DIF en lugar de `E = $15.799.511`; no es una salida
+válida de las fórmulas del XLS corregidas.
 
 ## Validaciones documentales y cálculo
 

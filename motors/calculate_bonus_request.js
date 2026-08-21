@@ -90,13 +90,14 @@ export async function calculateBonusRequest({ requestId }) {
   const row = lookup.row;
   const bonuses = extractPriceBonuses(row);
   const precioLista = priceListValue(row);
-  // The current pipeline has no independent evidence source for XLS column I.
+  // The current pipeline has no independent evidence source for XLS column L.
   // Never reuse the existing bonus_requests value: older runs populated it by
   // solving the PDV equation, which would make PDV_OK true by construction.
   const ruleInput = buildBonusBusinessRuleInput({
     request,
     precioLista,
     bonuses,
+    descuentosDealerEvidence: null,
   });
   const calculated = calculateBonusBusinessRules(ruleInput);
   const flags = {

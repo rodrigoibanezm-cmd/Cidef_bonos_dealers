@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { calculateBonusBusinessRules } from "../lib/bonus_business_rules.js";
+import {
+  calculateBonusBusinessRules,
+  calculateBonusDifferenceAmount,
+} from "../lib/bonus_business_rules.js";
 import {
   XLS_COLUMN_MAP,
   buildBonusBusinessRuleInput,
@@ -31,10 +34,10 @@ test("XLS columns map 1:1 to canonical calculation fields", () => {
     E: "monto_compra",
     F: "monto_venta",
     H: "precio_lista_venta",
-    I: "descuentos_dealer",
+    I: "bono_cidef",
     J: "bono_fin_venta",
     K: "bono_cierre_venta",
-    L: "bono_cidef",
+    L: "descuentos_dealer",
     M: "fecha_compra",
     N: "fecha_venta",
     P: "fac_compra_ok",
@@ -57,7 +60,7 @@ test("PDV_OK is empty when the independent values do not satisfy the XLS equalit
   assert.equal(result.pdv_ok, "");
 });
 
-test("PDV_OK is empty when independent XLS column I evidence is missing", () => {
+test("PDV_OK is empty when independent XLS column L evidence is missing", () => {
   const result = calculateBonusBusinessRules(validInput({ descuentos_dealer: null }));
   assert.equal(result.pdv_ok, "");
 });
@@ -82,6 +85,18 @@ test("BONO_DIF calculates exactly E - ((H - I) * 0.92)", () => {
   assert.equal(result.bono_dif, 2_550_332);
 });
 
+test("BONO_DIF mathematical amount depends on I=bono_cidef and not L=descuentos_dealer", () => {
+  const base = validInput({
+    monto_compra: 15_799_511,
+    precio_lista_venta: 15_490_000,
+    bono_cidef: 900_000,
+  });
+
+  assert.equal(calculateBonusDifferenceAmount({ ...base, descuentos_dealer: 0 }), 2_376_711);
+  assert.equal(calculateBonusDifferenceAmount({ ...base, descuentos_dealer: 999_999 }), 2_376_711);
+  assert.equal(calculateBonusDifferenceAmount({ ...base, bono_cidef: 800_000 }), 2_284_711);
+});
+
 test("BONO_CIERRE returns K only with P/Q/R/S/T OK and 1 < V < 91", () => {
   assert.equal(calculateBonusBusinessRules(validInput()).bono_cierre, 100_000);
   assert.equal(calculateBonusBusinessRules(validInput({ fac_reposicion_ok: "" })).bono_cierre, null);
@@ -102,19 +117,19 @@ test("stock days equal N - M in calendar days", () => {
   assert.equal(result.dias_stock_dealer, 8);
 });
 
-test("real fixture LVAV2MAB1TU475796 remains indeterminate without independent I evidence", () => {
+test("real fixture LVAV2MAB5TU475588 keeps mathematical BONO_DIF separate from payment eligibility", () => {
   const request = {
-    vin: "LVAV2MAB1TU475796",
-    monto_compra: 15_973_132,
-    monto_venta: 16_725_807,
-    fecha_compra: "2026-06-22",
-    fecha_venta: "2026-06-30",
+    vin: "LVAV2MAB5TU475588",
+    monto_compra: 15_799_511,
+    monto_venta: 15_000_000,
+    fecha_compra: "2026-03-31",
+    fecha_venta: "2026-06-11",
     fc_status: "OK",
     fv_status: "OK",
     inscripcion_status: "OK",
     reposicion_status: "OK",
-    financiamiento_status: "NO_APLICA",
-    descuentos_dealer: -2_835_807,
+    financiamiento_status: "OK",
+    descuentos_dealer: -1_110_000,
   };
   const input = buildBonusBusinessRuleInput({
     request,
@@ -129,17 +144,19 @@ test("real fixture LVAV2MAB1TU475796 remains indeterminate without independent I
 
   assert.equal(input.descuentos_dealer, null);
   assert.equal(result.pdv_ok, "");
-  assert.equal(result.dias_stock_dealer, 8);
+  assert.equal(result.dias_stock_dealer, 72);
+  assert.equal(result.bono_dif_matematico, 2_376_711);
+  assert.notEqual(result.bono_dif_matematico, 1_577_200);
   assert.equal(result.bono_dif, null);
   assert.equal(result.bono_cierre, null);
   assert.equal(result.bono_fin, null);
 });
 
-test("mapping never derives I from the PDV equation or reuses a legacy derived value", () => {
+test("mapping never derives L from the PDV equation or reuses a legacy derived value", () => {
   const request = {
-    monto_compra: 15_973_132,
-    monto_venta: 16_725_807,
-    descuentos_dealer: -2_835_807,
+    monto_compra: 15_799_511,
+    monto_venta: 15_000_000,
+    descuentos_dealer: -1_110_000,
     fc_status: "OK",
     fv_status: "OK",
     inscripcion_status: "OK",
