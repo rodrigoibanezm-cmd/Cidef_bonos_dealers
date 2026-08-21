@@ -136,7 +136,21 @@ export async function auditRouter({
       continue;
     }
 
-    const previous = await loadAudits({ tenantId, vin, issueCode: issue.code, sql });
+    const loadedAudits = await loadAudits({
+      tenantId,
+      vin,
+      issueCode: issue.code,
+      fileId: row.file_id,
+      extractionId: row.id,
+      sql,
+    });
+    // Dependency-injected loaders are filtered here as well so an audit from a
+    // previous file/run can never become an overlay for the current evidence.
+    const previous = loadedAudits.filter((audit) => (
+      String(audit.file_id || "") === String(row.file_id)
+      && (audit.extraction_id === null || audit.extraction_id === undefined
+        || String(audit.extraction_id) === String(row.id))
+    ));
     for (const audit of previous) {
       if (["CAPTURED", "RESOLVED"].includes(audit.resolution_status)) {
         effectiveDocuments = applyTargetedValues(effectiveDocuments, {

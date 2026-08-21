@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { classifyDocumentFromR2 } from "../../../lib/document_router.js";
-import { guardDocumentRouting } from "../../../lib/document_routing_guard.js";
+import { guardDocumentRouting, resolveFvRoutingConflict } from "../../../lib/document_routing_guard.js";
 import { getR2Object } from "../../../lib/r2.js";
-import { processExtractedDocument } from "../../../lib/process_extracted_document.js";
+import { extractDocument, processExtractedDocument } from "../../../lib/process_extracted_document.js";
 import { resolveFcOrReposicion } from "../../../lib/resolve_fc_reposicion.js";
 import { finalizeBonusOperation } from "../../../lib/finalize_bonus_operation.js";
 
@@ -44,39 +44,69 @@ export async function POST(request) {
       return NextResponse.json({ ok: true, key, ...result, extraction: null, persisted: null });
     }
 
+    const tenantId = tenantFromKey(key);
+    const sourceVin = vinFromSourceFilename(sourceFilename);
+    let object = null;
+    let file = null;
+    let preExtracted = null;
+    let documentType = result.document_type;
+    let routeReason = null;
+    let routeOverride = false;
+
     const routingGuard = guardDocumentRouting({
       sourceFilename,
       classifiedType: result.document_type,
     });
     if (!routingGuard.allowed) {
-      console.warn(`[DOC_ROUTE_UNCERTAIN] archivo=${key} source=${sourceFilename ?? "null"} hint=${routingGuard.sourceHint ?? "null"} classified=${result.document_type} reason=${routingGuard.reason}`);
-      return NextResponse.json({
-        ok: true,
-        key,
-        ...result,
-        resolved_document_type: "ROUTING_UNCERTAIN",
-        route_override: false,
-        route_reason: routingGuard.reason,
-        extraction: null,
-        persisted: null,
-        finalization: null,
+      object = await getR2Object(key);
+      file = { base64: object.buffer.toString("base64"), mimeType: object.contentType || "image/jpeg" };
+      if (routingGuard.sourceHint === "FV") {
+        preExtracted = await extractDocument({
+          documentType: "FV", tenantId, fileId: key, sourceVin, file,
+        });
+      }
+      const contentResolution = resolveFvRoutingConflict({
+        sourceHint: routingGuard.sourceHint,
+        classifiedType: result.document_type,
+        extraction: preExtracted,
+        operationVin: sourceVin,
       });
+      if (!contentResolution.allowed) {
+        console.warn(`[DOC_ROUTE_UNCERTAIN] archivo=${key} source=${sourceFilename ?? "null"} hint=${routingGuard.sourceHint ?? "null"} classified=${result.document_type} reason=${contentResolution.reason || routingGuard.reason}`);
+        return NextResponse.json({
+          ok: true,
+          key,
+          ...result,
+          resolved_document_type: "ROUTING_UNCERTAIN",
+          route_override: false,
+          route_reason: contentResolution.reason || routingGuard.reason,
+          extraction: null,
+          persisted: null,
+          finalization: null,
+        });
+      }
+      documentType = contentResolution.documentType;
+      routeReason = contentResolution.reason;
+      routeOverride = true;
+      console.log(`[DOC_ROUTE_CONTENT_RESOLVED] archivo=${key} source=${sourceFilename ?? "null"} from=${result.document_type} to=${documentType} reason=${routeReason}`);
     }
 
-    const object = await getR2Object(key);
-    const file = { base64: object.buffer.toString("base64"), mimeType: object.contentType || "image/jpeg" };
-    const tenantId = tenantFromKey(key);
-    const sourceVin = vinFromSourceFilename(sourceFilename);
+    if (!file) {
+      object = await getR2Object(key);
+      file = { base64: object.buffer.toString("base64"), mimeType: object.contentType || "image/jpeg" };
+    }
 
     const resolved = await resolveFcOrReposicion({
-      documentType: result.document_type,
+      documentType,
       sourceVin,
       file,
     });
-    const documentType = resolved.documentType;
+    documentType = resolved.documentType;
 
     if (resolved.overridden) {
       console.log(`[DOC_ROUTE_OVERRIDE] archivo=${key} source=${sourceFilename ?? "null"} from=${result.document_type} to=${documentType} operation_vin=${sourceVin ?? "null"} document_vin=${resolved.chassis?.vin ?? "null"} reason=${resolved.reason}`);
+      routeOverride = true;
+      routeReason = resolved.reason;
     }
 
     const processed = await processExtractedDocument({
@@ -86,6 +116,7 @@ export async function POST(request) {
       sourceFilename,
       sourceVin,
       file,
+      preExtracted,
     });
 
     console.log(`[DOC_EXTRACT] archivo=${key} tipo=${documentType} source=${sourceFilename ?? "null"} status=${processed.extraction?.status ?? "null"}`);
@@ -107,8 +138,8 @@ export async function POST(request) {
       key,
       ...result,
       resolved_document_type: documentType,
-      route_override: resolved.overridden,
-      route_reason: resolved.reason || routingGuard.reason || null,
+      route_override: routeOverride,
+      route_reason: routeReason || routingGuard.reason || null,
       extraction: processed.extraction,
       persisted: processed.persisted,
       finalization,
