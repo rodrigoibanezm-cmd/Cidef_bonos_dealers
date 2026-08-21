@@ -50,8 +50,18 @@ si no → ""
 ```
 
 No se debe introducir tolerancia matemática salvo que negocio la defina explícitamente.
-`L = DESCUENTOS DEALER` debe provenir de evidencia independiente. No se puede
-despejar `L = H - J - K - I - F` y reutilizarlo para aprobar la misma igualdad.
+`L = DESCUENTOS DEALER` sólo participa en esta validación cuando existe un monto
+aprobado con procedencia independiente. No se puede despejar
+`L = H - J - K - I - F` y reutilizarlo para aprobar la misma igualdad.
+
+El sistema puede calcular como diagnóstico:
+
+```txt
+descuento_dealer_residual = H - J - K - I - F
+```
+
+Ese residual no es un descuento aprobado, no se persiste en `descuentos_dealer` y
+no cambia `PDV_OK` a `OK` por sí solo.
 
 ## DIAS_STOCK
 
@@ -70,7 +80,31 @@ en otro caso → fecha_venta - fecha_compra
 
 En la implementación actual se trabaja en días calendario.
 
-## BONO_DIF
+## BONO_DIF versionado
+
+La fórmula depende del período de la operación. No se debe promover la regla de
+un mes a todos los períodos sin evidencia operacional.
+
+### Marzo 2026
+
+La planilla revisada de marzo usa:
+
+```excel
+=SI((Y(P2="OK";Q2="OK";R2="OK";S2="OK";T2="OK";V2<91;V2>1))=VERDADERO;
+   (SI((E2-(H2*0,92))<0;0;(E2-(H2*0,92))));
+   "")
+```
+
+Por tanto:
+
+```txt
+base_marzo_2026 = E - (H * 0.92)
+BONO_DIF = max(0, base_marzo_2026)
+```
+
+`I = BONO CIDEF` no se resta en la fórmula de marzo.
+
+### Regla previamente documentada para otros períodos
 
 Fórmula original:
 
@@ -98,9 +132,10 @@ base = E - ((H - I) * 0.92)
 BONO_DIF = max(0, base)
 ```
 
-El valor matemático de `base` requiere solamente `E`, `H` e `I`; no depende de
-`L = descuentos_dealer`. Si no se cumplen las condiciones P/Q/R/S/T y stock,
-la celda pagable `BONO_DIF` queda vacía aunque esa base matemática se pueda
+El motor conserva esta regla para períodos distintos de marzo 2026 hasta que una
+auditoría del XLS del período confirme otra versión. En ambas versiones el valor
+matemático no depende de `L = descuentos_dealer`. Si no se cumplen las condiciones
+P/Q/R/S/T y stock, la celda pagable `BONO_DIF` queda vacía aunque la base se pueda
 calcular para diagnóstico.
 
 `BONO_DIF` corresponde a diferencia de precio; conceptualmente no es un bono comercial y debe mantenerse separado en la información económica.
@@ -130,7 +165,23 @@ Resultado:
 BONO_CIERRE = bono_cierre_venta
 ```
 
-Importante: se toma únicamente el bono mes/cierre vigente de la lista aplicable. No se deben sumar campos duplicados del payload ni reconstruirlo desde múltiples alias.
+Por defecto, `K` es el bono promocional de la fila de lista aplicable. En marzo
+2026 corresponde a la columna `Bono Marzo`, importada canónicamente como
+`price_history.bono_mes`. No se deben sumar campos duplicados del payload ni
+reconstruir el monto desde múltiples alias.
+
+Los conceptos se mantienen separados:
+
+```txt
+bono_cierre_lista    = price_history.bono_mes
+bono_cierre_override = monto manual conocido, si existe
+bono_cierre_efectivo = bono_cierre_lista mientras el override no sea aprobado
+```
+
+El motor nunca infiere un override desde el residual económico. Un override
+manual exige monto, motivo, fuente/autorización, actor y fecha. Si el valor
+histórico/manual difiere de la lista, el cálculo queda `REQUIERE_REVISION` y el
+override no sustituye automáticamente el valor de lista.
 
 ## BONO_FIN
 
@@ -181,8 +232,34 @@ Para calcular los bonos de venta:
    - precio lista
    - bono CIDEF
    - bono financiamiento/Forum
-   - bono mes/cierre
+   - bono promocional (`bono_mes`), usado por defecto como bono cierre
 5. Ejecutar las fórmulas anteriores.
+
+## Caso de regresión marzo 2026
+
+```txt
+VIN: LGJE1EE09TM494653
+Precio compra: $11.950.800
+Precio venta: $10.890.000
+Precio lista: $13.290.000
+Bono CIDEF: $300.000
+Bono financiamiento: $600.000
+Bono promocional / cierre lista: $500.000
+Descuento dealer aprobado necesario para PDV_OK: $1.000.000
+```
+
+Con todos los controles P/Q/R/S/T/U en `OK`:
+
+```txt
+BONO_DIF_MARZO = max(0, $11.950.800 - ($13.290.000 * 0,92)) = $0
+BONO_CIERRE = $500.000
+BONO_FIN = $600.000 / 3 = $200.000
+TOTAL_DETERMINISTICO = $700.000
+```
+
+La planilla histórica contiene `bono_cierre = $300.000`. Esa diferencia se trata
+como override manual no reproducible y deja la operación `REQUIERE_REVISION`; no
+reemplaza automáticamente los $500.000 provenientes de la lista.
 
 Caso de regresión documental:
 

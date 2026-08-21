@@ -1,13 +1,17 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  BONUS_RULE_VERSIONS,
+  bonusRuleVersionForDate,
   calculateBonusBusinessRules,
+  calculateDealerDiscountResidual,
   calculateBonusDifferenceAmount,
 } from "../lib/bonus_business_rules.js";
 import {
   XLS_COLUMN_MAP,
   buildBonusBusinessRuleInput,
 } from "../lib/bonus_business_rule_inputs.js";
+import { extractPriceBonuses } from "../lib/price_bonus_payload.js";
 
 function validInput(overrides = {}) {
   return {
@@ -95,6 +99,141 @@ test("BONO_DIF mathematical amount depends on I=bono_cidef and not L=descuentos_
   assert.equal(calculateBonusDifferenceAmount({ ...base, descuentos_dealer: 0 }), 2_376_711);
   assert.equal(calculateBonusDifferenceAmount({ ...base, descuentos_dealer: 999_999 }), 2_376_711);
   assert.equal(calculateBonusDifferenceAmount({ ...base, bono_cidef: 800_000 }), 2_284_711);
+});
+
+test("March 2026 BONO_DIF is versioned and calculates max(0, E - H * 0.92)", () => {
+  const input = validInput({
+    fecha_compra: "2026-02-28",
+    fecha_venta: "2026-03-10",
+    monto_compra: 11_950_800,
+    precio_lista_venta: 13_290_000,
+    bono_cidef: 300_000,
+  });
+
+  assert.equal(bonusRuleVersionForDate(input.fecha_venta), BONUS_RULE_VERSIONS.MARCH_2026);
+  assert.equal(calculateBonusDifferenceAmount(input), 0);
+  assert.equal(calculateBonusDifferenceAmount({ ...input, bono_cidef: 0 }), 0);
+  assert.equal(calculateBonusDifferenceAmount({ ...input, bono_cidef: 9_999_999 }), 0);
+});
+
+test("price-list promotional bonus is the default closure bonus without summing aliases", () => {
+  const bonuses = extractPriceBonuses({
+    bono_cidef: 300_000,
+    bono_forum: 600_000,
+    bono_mes: 500_000,
+    raw_payload: { bono_marzo: 500_000, otro_bono: 200_000 },
+  });
+
+  assert.equal(bonuses.bono_cidef, 300_000);
+  assert.equal(bonuses.bono_fin_venta, 600_000);
+  assert.equal(bonuses.bono_promocional, 500_000);
+  assert.equal(bonuses.bono_cierre_lista, 500_000);
+  assert.equal(bonuses.bono_cierre_venta, 500_000);
+  assert.deepEqual(bonuses.componentes_cierre, { bono_mes: 500_000 });
+});
+
+test("LGJE1EE09TM494653 produces $700,000 when the independent dealer discount is approved", () => {
+  const result = calculateBonusBusinessRules(validInput({
+    monto_compra: 11_950_800,
+    precio_venta: 10_890_000,
+    precio_lista_venta: 13_290_000,
+    bono_cidef: 300_000,
+    bono_fin_venta: 600_000,
+    bono_cierre_venta: 500_000,
+    descuentos_dealer: 1_000_000,
+    fecha_compra: "2026-02-28",
+    fecha_venta: "2026-03-10",
+  }));
+  assert.equal(result.rule_version, BONUS_RULE_VERSIONS.MARCH_2026);
+  assert.equal(result.pdv_ok, "OK");
+  assert.equal(result.descuento_dealer_residual, 1_000_000);
+  assert.equal(result.bono_dif, 0);
+  assert.equal(result.bono_cierre_lista, 500_000);
+  assert.equal(result.bono_cierre, 500_000);
+  assert.equal(result.bono_fin, 200_000);
+  assert.equal(result.total_deterministico, 700_000);
+  assert.equal(result.calculation_status, "OK");
+});
+
+test("historical closure override never replaces the list bonus and requires review", () => {
+  const result = calculateBonusBusinessRules(validInput({
+    monto_compra: 11_950_800,
+    precio_venta: 10_890_000,
+    precio_lista_venta: 13_290_000,
+    bono_cidef: 300_000,
+    bono_fin_venta: 600_000,
+    bono_cierre_venta: 500_000,
+    descuentos_dealer: 1_000_000,
+    fecha_compra: "2026-02-28",
+    fecha_venta: "2026-03-10",
+    bono_cierre_override: {
+      monto: 300_000,
+      motivo: "Valor histórico observado",
+      fuente_autorizacion: "Planilla revisada",
+      actor: "auditor-negocio",
+      fecha: "2026-03-31",
+    },
+  }));
+
+  assert.equal(result.bono_cierre_override, 300_000);
+  assert.equal(result.bono_cierre_override_completo, true);
+  assert.equal(result.bono_cierre_efectivo, 500_000);
+  assert.equal(result.bono_cierre, 500_000);
+  assert.equal(result.total_deterministico, 700_000);
+  assert.equal(result.calculation_status, "REQUIERE_REVISION");
+  assert.deepEqual(result.review_reasons, ["BONO_CIERRE_OVERRIDE_REQUIERE_REVISION"]);
+});
+
+test("manual closure override without authorization metadata cannot be approved", () => {
+  const result = calculateBonusBusinessRules(validInput({
+    bono_cierre_venta: 500_000,
+    bono_cierre_override: { monto: 300_000 },
+  }));
+
+  assert.equal(result.bono_cierre_override_completo, false);
+  assert.equal(result.bono_cierre_efectivo, 500_000);
+  assert.equal(result.calculation_status, "REQUIERE_REVISION");
+});
+
+test("normal March operation closes with promotional closure bonus when validations are OK", () => {
+  const result = calculateBonusBusinessRules(validInput({
+    monto_compra: 12_000_000,
+    precio_lista_venta: 13_000_000,
+    bono_cidef: 300_000,
+    bono_fin_venta: 600_000,
+    bono_cierre_venta: 500_000,
+    descuentos_dealer: 0,
+    precio_venta: 11_600_000,
+    fecha_compra: "2026-03-01",
+    fecha_venta: "2026-03-20",
+  }));
+
+  assert.equal(result.pdv_ok, "OK");
+  assert.equal(result.bono_cierre, 500_000);
+  assert.equal(result.calculation_status, "OK");
+  assert.equal(result.review_reasons.length, 0);
+});
+
+test("positive dealer residual remains diagnostic and never fabricates PDV_OK", () => {
+  const input = validInput({
+    precio_venta: 10_890_000,
+    precio_lista_venta: 13_290_000,
+    bono_cidef: 300_000,
+    bono_fin_venta: 600_000,
+    bono_cierre_venta: 500_000,
+    descuentos_dealer: null,
+    fecha_compra: "2026-02-28",
+    fecha_venta: "2026-03-10",
+  });
+  const result = calculateBonusBusinessRules(input);
+
+  assert.equal(calculateDealerDiscountResidual(input), 1_000_000);
+  assert.equal(result.descuento_dealer_residual, 1_000_000);
+  assert.equal(result.descuento_dealer_aprobado, null);
+  assert.equal(result.pdv_ok, "");
+  assert.equal(result.bono_cierre, null);
+  assert.equal(result.bono_fin, null);
+  assert.equal(result.calculation_status, "PENDIENTE");
 });
 
 test("BONO_CIERRE returns K only with P/Q/R/S/T OK and 1 < V < 91", () => {

@@ -9,6 +9,16 @@ function normalize(value) {
   return String(value || "").trim().toUpperCase();
 }
 
+function historicalClosureOverride(request, bonoCierreLista) {
+  if (request?.bono_cierre_venta === null || request?.bono_cierre_venta === undefined) return null;
+  const historicalAmount = Number(request.bono_cierre_venta);
+  if (!Number.isFinite(historicalAmount) || historicalAmount === bonoCierreLista) return null;
+
+  // The current schema does not preserve the mandatory authorization metadata.
+  // A differing historical value is therefore detectable, but not approvable.
+  return { monto: historicalAmount };
+}
+
 async function lookupPrice(sql, vin, fecha) {
   const inventoryRows = await sql`
     SELECT vin_chasis, marca, desc_abrev, tipo_motor, norma
@@ -90,6 +100,7 @@ export async function calculateBonusRequest({ requestId }) {
   const row = lookup.row;
   const bonuses = extractPriceBonuses(row);
   const precioLista = priceListValue(row);
+  const bonoCierreOverride = historicalClosureOverride(request, bonuses.bono_cierre_lista);
   // The current pipeline has no independent evidence source for XLS column L.
   // Never reuse the existing bonus_requests value: older runs populated it by
   // solving the PDV equation, which would make PDV_OK true by construction.
@@ -98,6 +109,7 @@ export async function calculateBonusRequest({ requestId }) {
     precioLista,
     bonuses,
     descuentosDealerEvidence: null,
+    bonoCierreOverride,
   });
   const calculated = calculateBonusBusinessRules(ruleInput);
   const flags = {
@@ -107,9 +119,8 @@ export async function calculateBonusRequest({ requestId }) {
     fac_reposicion_ok: ruleInput.fac_reposicion_ok,
     carta_credito_ok: ruleInput.carta_credito_ok,
   };
-  const totalDevolver = calculated.pdv_ok === "OK"
-    ? (calculated.bono_dif ?? 0) + (calculated.bono_cierre ?? 0) + (calculated.bono_fin ?? 0)
-    : null;
+  const totalDeterministico = calculated.total_deterministico;
+  const totalDevolver = calculated.calculation_status === "OK" ? totalDeterministico : null;
 
   const evidence = {
     inventory: {
@@ -128,6 +139,13 @@ export async function calculateBonusRequest({ requestId }) {
     match_score: lookup.score,
     match_reasons: lookup.match_reasons,
     componentes_cierre: bonuses.componentes_cierre,
+    regla_calculo: calculated.rule_version,
+    bono_cierre_lista: calculated.bono_cierre_lista,
+    bono_cierre_override: calculated.bono_cierre_override,
+    descuento_dealer_residual: calculated.descuento_dealer_residual,
+    descuento_dealer_aprobado: calculated.descuento_dealer_aprobado,
+    calculation_status: calculated.calculation_status,
+    review_reasons: calculated.review_reasons,
   };
 
   await persistPriceLookupAudit({
@@ -153,17 +171,24 @@ export async function calculateBonusRequest({ requestId }) {
       diferencia_precio=${calculated.bono_dif}, bono_financiamiento=${calculated.bono_fin},
       otro_bono=${calculated.bono_cierre},
       total_devolver=${totalDevolver},
+      requiere_revision_humana=case
+        when ${calculated.calculation_status}='REQUIERE_REVISION' then true
+        else requiere_revision_humana
+      end,
       price_lookup_status='ok', price_lookup_evidence=null, updated_at=now()
     WHERE id=${requestId}
   `;
 
   return {
-    status: calculated.pdv_ok === "OK" ? "ok" : "pending",
-    reason: calculated.pdv_ok === "OK" ? null : "DESCUENTO_DEALER_EVIDENCE_REQUIRED",
+    status: calculated.calculation_status === "OK" ? "ok" : "pending",
+    reason: calculated.calculation_status === "REQUIERE_REVISION"
+      ? "BONO_CIERRE_OVERRIDE_REQUIERE_REVISION"
+      : calculated.pdv_ok === "OK" ? null : "DESCUENTO_DEALER_EVIDENCE_REQUIRED",
     request_id: requestId,
     ...bonuses,
     ...flags,
     ...calculated,
+    total_deterministico: totalDeterministico,
     total_devolver: totalDevolver,
     evidence,
   };
