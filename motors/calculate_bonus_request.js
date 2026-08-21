@@ -4,6 +4,10 @@ import { buildBonusBusinessRuleInput } from "../lib/bonus_business_rule_inputs.j
 import { extractPriceBonuses, priceListValue } from "../lib/price_bonus_payload.js";
 import { rankPriceVersions } from "../lib/price_version_match.js";
 import { persistPriceLookupAudit } from "../lib/persist_price_lookup_audit.js";
+import {
+  closureBlocksCalculation,
+  persistCurrentCalculationClosure,
+} from "../lib/calculation_closure_status.js";
 
 function normalize(value) {
   return String(value || "").trim().toUpperCase();
@@ -68,10 +72,19 @@ export async function calculateBonusRequest({
   const requests = await sql`SELECT * FROM bonus_requests WHERE id = ${requestId} LIMIT 1`;
   const request = requests[0];
   if (!request) throw new Error("bonus request not found");
-  if (request.cierre_estado && request.cierre_estado !== "VERDE") {
+  if (closureBlocksCalculation(request)) {
     return { status: "pending", reason: "DOCUMENTACION_NO_VERDE", cierre_estado: request.cierre_estado };
   }
-  if (!request.fecha_venta) return { status: "pending", reason: "FECHA_VENTA_REQUIRED" };
+  if (!request.fecha_venta) {
+    const pending = {
+      calculation_status: "PENDIENTE",
+      pdv_ok: request.pdv_ok,
+      total_devolver: null,
+      reason: "FECHA_VENTA_REQUIRED",
+    };
+    await persistCurrentCalculationClosure({ request, calculation: pending, sql });
+    return { status: "pending", reason: "FECHA_VENTA_REQUIRED" };
+  }
 
   const lookup = await lookupPrice(sql, request.vin, request.fecha_venta);
   if (lookup.status !== "ok") {
@@ -88,6 +101,17 @@ export async function calculateBonusRequest({
       SET price_lookup_status=${lookup.status}, price_lookup_evidence=null, updated_at=now()
       WHERE id=${requestId}
     `;
+    await persistCurrentCalculationClosure({
+      request,
+      calculation: {
+        calculation_status: "PENDIENTE",
+        pdv_ok: request.pdv_ok,
+        total_devolver: null,
+        price_lookup_status: lookup.status,
+        reason: lookup.reason ?? null,
+      },
+      sql,
+    });
     return lookup;
   }
 
@@ -174,6 +198,20 @@ export async function calculateBonusRequest({
     WHERE id=${requestId}
   `;
 
+  const currentClosure = await persistCurrentCalculationClosure({
+    request,
+    calculation: {
+      calculation_status: calculated.calculation_status,
+      pdv_ok: calculated.pdv_ok,
+      total_devolver: totalDevolver,
+      price_lookup_status: "ok",
+      reason: calculated.calculation_status === "REQUIERE_REVISION"
+        ? "BONO_CIERRE_OVERRIDE_REQUIERE_REVISION"
+        : calculated.pdv_ok === "OK" ? null : "DESCUENTO_DEALER_EVIDENCE_REQUIRED",
+    },
+    sql,
+  });
+
   return {
     status: calculated.calculation_status === "OK" ? "ok" : "pending",
     reason: calculated.calculation_status === "REQUIERE_REVISION"
@@ -185,6 +223,7 @@ export async function calculateBonusRequest({
     ...calculated,
     total_deterministico: totalDeterministico,
     total_devolver: totalDevolver,
+    cierre_estado: currentClosure.cierre_estado,
     evidence,
   };
 }

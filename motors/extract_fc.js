@@ -31,18 +31,25 @@ const FC_SCHEMA_V1 = {
   ],
 };
 
-function chassisStatus({ chassis, expectedVin, fullExtractionVin }) {
+export function resolveFcVinStatus({ chassis, expectedVin, fullExtractionVin }) {
   if (!chassis.vin || !chassis.readable || chassis.parse_error) return "VIN_UNREADABLE";
 
   const expected = normalizeChassis(expectedVin) || null;
   const fullMatchesChassis = Boolean(fullExtractionVin && fullExtractionVin === chassis.vin);
 
-  if (chassis.retried && chassis.retry_consistent === false && !fullMatchesChassis) {
-    return "VIN_ERROR";
+  // The field-specific Chassis read is the canonical evidence. If it is
+  // stable and matches the operation VIN, a typo from the broad extraction is
+  // retained in full_extraction_vin but must not invalidate the document.
+  if (expected && chassis.vin === expected && (!chassis.retried || chassis.retry_consistent !== false)) {
+    return "OK";
   }
 
-  if (fullExtractionVin && !fullMatchesChassis) return "VIN_INCONSISTENT";
+  if (chassis.retried && chassis.retry_consistent === false && !fullMatchesChassis) {
+    return "VIN_INCONSISTENT";
+  }
+
   if (expected && chassis.vin !== expected) return "VIN_MISMATCH";
+  if (fullExtractionVin && !fullMatchesChassis) return "VIN_INCONSISTENT";
   return "OK";
 }
 
@@ -163,7 +170,7 @@ export async function extractFc({
   const vinMatch = expected ? chassis.vin === expected : null;
   const status = extracted._parse_error === true
     ? "EXTRACTION_ERROR"
-    : chassisStatus({ chassis, expectedVin: expected, fullExtractionVin });
+    : resolveFcVinStatus({ chassis, expectedVin: expected, fullExtractionVin });
 
   return {
     tenant_id: tenantId,

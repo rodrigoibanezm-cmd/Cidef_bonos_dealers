@@ -13,6 +13,7 @@ REGLA CRITICA FC vs FV
 2. Si el emisor es CIDEF, clasifica FC.
 3. Si el emisor es un dealer/automotora distinto de CIDEF y vende al cliente final, clasifica FV.
 4. No clasifiques una factura como FC solo porque vende un vehículo nuevo o porque visualmente se parece a otra factura.
+5. La palabra "reposición", "refacturada" o una referencia a reposición dentro de observaciones no convierte por sí sola una factura emitida por un dealer al cliente final en REPOSICION: en ese caso sigue siendo FV.
 
 REGLA CRITICA INSCRIPCION
 
