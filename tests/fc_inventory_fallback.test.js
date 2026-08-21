@@ -6,6 +6,7 @@ import { persistConsolidatedBonusRequest } from "../lib/persist_consolidated_bon
 import { persistOperationClosure } from "../lib/persist_operation_closure.js";
 import { resolveFcEvidence } from "../lib/reconstruct_fc_from_inventory.js";
 import { syncBonusRequestDocuments } from "../lib/sync_bonus_request_documents.js";
+import { getBonusRequestForReview } from "../lib/approval_workflow.js";
 
 const VIN = "LGJE5EE08TM442158";
 
@@ -200,4 +201,35 @@ test("FC reconstruida no se materializa como documento falso", async () => {
     documents: { fc, fv: null, ins: null, fin: null, repo: null },
   });
   assert.equal(statements.length, 0);
+});
+
+test("revisión conserva FC reconstruida aunque exista un cierre económico posterior", async () => {
+  const reconstruction = {
+    source: "INVENTARIO",
+    documento_original: false,
+    fc_reconstruida: true,
+    vin: VIN,
+  };
+  const sql = async (strings) => {
+    const text = strings.join("?");
+    if (text.includes("select * from bonus_requests")) {
+      return [{ id: "request-1", tenant_id: "dealer_demo", vin: VIN }];
+    }
+    if (text.includes("bonus_request_documents")) {
+      return [
+        { document_type: "FV", review_status: "APROBADO" },
+        { document_type: "INSCRIPCION", review_status: "APROBADO" },
+      ];
+    }
+    if (text.includes("bonus_operation_closure_audits")) {
+      assert.match(text, /phase='FINAL'[\s\S]*evidence \? 'fc_reconstruction'/);
+      return [{ fc_reconstruction: reconstruction }];
+    }
+    return [];
+  };
+
+  const review = await getBonusRequestForReview("request-1", { sql });
+  assert.deepEqual(review.fc_reconstruction, reconstruction);
+  assert.equal(review.review_complete, true);
+  assert.deepEqual(review.sequence, ["FV", "INSCRIPCION"]);
 });
