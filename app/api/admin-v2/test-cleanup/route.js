@@ -24,11 +24,11 @@ export async function POST(request) {
 
     const ids = targets.map((row) => String(row.id));
 
-    await sql.begin(async (tx) => {
-      await tx`delete from bonus_request_events where request_id::text = any(${ids})`;
-      await tx`delete from bonus_request_documents where request_id::text = any(${ids})`;
-      await tx`delete from bonus_requests where id::text = any(${ids})`;
-    });
+    // db() returns the Neon HTTP query function, which does not expose sql.begin().
+    // Cleanup is intentionally simple/test-only and runs in FK-safe order.
+    await sql`delete from bonus_request_events where request_id::text = any(${ids})`;
+    await sql`delete from bonus_request_documents where request_id::text = any(${ids})`;
+    await sql`delete from bonus_requests where id::text = any(${ids})`;
 
     return NextResponse.json({ ok: true, deleted: ids.length });
   } catch (error) {
