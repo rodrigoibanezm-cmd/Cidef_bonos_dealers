@@ -13,6 +13,18 @@ function normalize(value) {
   return String(value || "").trim().toUpperCase();
 }
 
+function canonicalPriceBrand(value) {
+  const brand = normalize(value);
+  if (brand === "DFLM" || brand === "DFM" || brand === "DONGFENG") return "DONGFENG";
+  return brand;
+}
+
+function priceBrandAliases(value) {
+  const brand = canonicalPriceBrand(value);
+  if (brand === "DONGFENG") return ["DONGFENG", "DFM", "DFLM"];
+  return [brand];
+}
+
 async function lookupPrice(sql, vin, fecha) {
   const inventoryRows = await sql`
     SELECT vin_chasis, marca, desc_abrev, tipo_motor, norma
@@ -23,6 +35,7 @@ async function lookupPrice(sql, vin, fecha) {
   const inventory = inventoryRows[0];
   if (!inventory) return { status: "not_found", reason: "VIN_NOT_IN_INVENTORY" };
 
+  const brandAliases = priceBrandAliases(inventory.marca);
   const candidates = await sql`
     SELECT pv.*, ph.price_history_id, ph.vigencia_desde, ph.precio_neto, ph.precio_lista,
            ph.precio_con_iva, ph.bono_cidef, ph.bono_forum, ph.bono_mes, ph.raw_payload,
@@ -33,7 +46,7 @@ async function lookupPrice(sql, vin, fecha) {
       WHERE ph.price_version_id = pv.price_version_id AND ph.vigencia_desde <= ${fecha}
       ORDER BY ph.vigencia_desde DESC, ph.created_at DESC LIMIT 1
     ) ph ON true
-    WHERE UPPER(TRIM(pv.marca)) = ${normalize(inventory.marca)} AND pv.activo = true
+    WHERE UPPER(TRIM(pv.marca)) = ANY(${brandAliases}) AND pv.activo = true
   `;
 
   const ranked = rankPriceVersions(inventory, candidates);
@@ -118,9 +131,6 @@ export async function calculateBonusRequest({
   const row = lookup.row;
   const bonuses = extractPriceBonuses(row);
   const precioLista = priceListValue(row);
-  // Never treat the previous canonical list value as a manual override. A
-  // difference is review evidence, while an override must arrive explicitly
-  // with its authorization metadata.
   const ruleInput = buildBonusBusinessRuleInput({
     request,
     precioLista,
@@ -143,6 +153,8 @@ export async function calculateBonusRequest({
   const evidence = {
     inventory: {
       vin: lookup.inventory.vin_chasis,
+      marca: lookup.inventory.marca,
+      marca_canonica: canonicalPriceBrand(lookup.inventory.marca),
       desc_abrev: lookup.inventory.desc_abrev,
       tipo_motor: lookup.inventory.tipo_motor,
       norma: lookup.inventory.norma,
