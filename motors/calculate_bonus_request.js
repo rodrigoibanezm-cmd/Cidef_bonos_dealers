@@ -1,5 +1,6 @@
 import { db } from "../lib/db.js";
 import { calculateBonusBusinessRules } from "../lib/bonus_business_rules.js";
+import { buildBonusBusinessRuleInput } from "../lib/bonus_business_rule_inputs.js";
 import { extractPriceBonuses, priceListValue } from "../lib/price_bonus_payload.js";
 import { rankPriceVersions } from "../lib/price_version_match.js";
 import { persistPriceLookupAudit } from "../lib/persist_price_lookup_audit.js";
@@ -89,29 +90,25 @@ export async function calculateBonusRequest({ requestId }) {
   const row = lookup.row;
   const bonuses = extractPriceBonuses(row);
   const precioLista = priceListValue(row);
-  const descuentosDealer = request.monto_venta === null || precioLista === null
-    ? null
-    : precioLista - bonuses.bono_fin_venta - bonuses.bono_cierre_venta - bonuses.bono_cidef - Number(request.monto_venta);
-
-  const flags = {
-    fac_compra_ok: request.fc_status === "OK" ? "OK" : "",
-    fac_venta_ok: request.fv_status === "OK" ? "OK" : "",
-    inscripcion_venta_ok: request.inscripcion_status === "OK" ? "OK" : "",
-    fac_reposicion_ok: request.reposicion_status === "OK" ? "OK" : "",
-    carta_credito_ok: request.financiamiento_status === "OK" ? "OK" : "",
-  };
-
-  const calculated = calculateBonusBusinessRules({
-    precio_venta: request.monto_venta,
-    precio_lista_venta: precioLista,
-    bono_cidef: bonuses.bono_cidef,
-    bono_fin_venta: bonuses.bono_fin_venta,
-    bono_cierre_venta: bonuses.bono_cierre_venta,
-    descuentos_dealer: descuentosDealer,
-    fecha_compra: request.fecha_compra,
-    fecha_venta: request.fecha_venta,
-    ...flags,
+  // The current pipeline has no independent evidence source for XLS column I.
+  // Never reuse the existing bonus_requests value: older runs populated it by
+  // solving the PDV equation, which would make PDV_OK true by construction.
+  const ruleInput = buildBonusBusinessRuleInput({
+    request,
+    precioLista,
+    bonuses,
   });
+  const calculated = calculateBonusBusinessRules(ruleInput);
+  const flags = {
+    fac_compra_ok: ruleInput.fac_compra_ok,
+    fac_venta_ok: ruleInput.fac_venta_ok,
+    inscripcion_venta_ok: ruleInput.inscripcion_venta_ok,
+    fac_reposicion_ok: ruleInput.fac_reposicion_ok,
+    carta_credito_ok: ruleInput.carta_credito_ok,
+  };
+  const totalDevolver = calculated.pdv_ok === "OK"
+    ? (calculated.bono_dif ?? 0) + (calculated.bono_cierre ?? 0) + (calculated.bono_fin ?? 0)
+    : null;
 
   const evidence = {
     inventory: {
@@ -146,7 +143,7 @@ export async function calculateBonusRequest({ requestId }) {
       marca=${row.marca}, modelo=${row.modelo}, price_version_id=${row.price_version_id},
       lista_precio_utilizada=${row.source_file}, precio_lista_venta=${precioLista},
       bono_cidef=${bonuses.bono_cidef}, bono_fin_venta=${bonuses.bono_fin_venta},
-      bono_cierre_venta=${bonuses.bono_cierre_venta}, descuentos_dealer=${descuentosDealer},
+      bono_cierre_venta=${bonuses.bono_cierre_venta}, descuentos_dealer=${ruleInput.descuentos_dealer},
       fac_compra_ok=${flags.fac_compra_ok}, fac_venta_ok=${flags.fac_venta_ok},
       inscripcion_venta_ok=${flags.inscripcion_venta_ok}, fac_reposicion_ok=${flags.fac_reposicion_ok},
       carta_credito_ok=${flags.carta_credito_ok}, pdv_ok=${calculated.pdv_ok},
@@ -154,10 +151,19 @@ export async function calculateBonusRequest({ requestId }) {
       bono_cierre=${calculated.bono_cierre}, bono_fin=${calculated.bono_fin},
       diferencia_precio=${calculated.bono_dif}, bono_financiamiento=${calculated.bono_fin},
       otro_bono=${calculated.bono_cierre},
-      total_devolver=${(calculated.bono_dif ?? 0) + (calculated.bono_cierre ?? 0) + (calculated.bono_fin ?? 0)},
+      total_devolver=${totalDevolver},
       price_lookup_status='ok', price_lookup_evidence=null, updated_at=now()
     WHERE id=${requestId}
   `;
 
-  return { status: "ok", request_id: requestId, ...bonuses, ...flags, ...calculated, evidence };
+  return {
+    status: calculated.pdv_ok === "OK" ? "ok" : "pending",
+    reason: calculated.pdv_ok === "OK" ? null : "DESCUENTO_DEALER_EVIDENCE_REQUIRED",
+    request_id: requestId,
+    ...bonuses,
+    ...flags,
+    ...calculated,
+    total_devolver: totalDevolver,
+    evidence,
+  };
 }
