@@ -20,7 +20,7 @@ function asList(value) {
   try { const parsed = typeof value === "string" ? JSON.parse(value) : value; return Array.isArray(parsed) ? parsed.filter(Boolean) : []; }
   catch { return []; }
 }
-function money(value) { const number = Number(value); return Number.isFinite(number) ? `$ ${Math.trunc(number).toLocaleString("es-CL")}` : "-"; }
+function money(value) { if (value === null || value === undefined || value === "") return "-"; const number = Number(value); return Number.isFinite(number) ? `$ ${Math.trunc(number).toLocaleString("es-CL")}` : "-"; }
 function AuditSummary({ request }) {
   const cierre=String(request.cierre_estado||"").toUpperCase(); const inconsistencias=asList(request.inconsistencias); const tone=cierre==="ROJO"?styles.auditRed:request.requiere_revision_humana||cierre==="AMARILLO"?styles.auditYellow:styles.auditGreen;
   return <section className={`${styles.auditSummary} ${tone}`}><div className={styles.auditHeadline}><div><small>Resultado auditor automático</small><strong>{cierre||"SIN CIERRE"}</strong></div><span>{request.audit_status||"SIN ESTADO"}</span></div><div className={styles.auditBody}><div><small>Documentación</small><strong>{request.documentacion_estado||"-"}</strong></div><div><small>Revisión humana</small><strong>{request.requiere_revision_humana?"Requerida":"No requerida"}</strong></div><div className={styles.auditObservations}><small>Observaciones activas</small>{inconsistencias.length?<ul>{inconsistencias.map((item)=><li key={item}>{item}</li>)}</ul>:<strong>Sin observaciones</strong>}</div></div></section>;

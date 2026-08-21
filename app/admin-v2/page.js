@@ -16,6 +16,7 @@ function dateLabel(value) {
 }
 
 function money(value) {
+  if (value === null || value === undefined || value === "") return "-";
   const number = Number(value);
   return Number.isFinite(number) ? `$ ${Math.trunc(number).toLocaleString("es-CL")}` : "-";
 }
