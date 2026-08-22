@@ -3,6 +3,7 @@ import { calculateBonusBusinessRules } from "../lib/bonus_business_rules.js";
 import { buildBonusBusinessRuleInput } from "../lib/bonus_business_rule_inputs.js";
 import { extractPriceBonuses, priceListValue } from "../lib/price_bonus_payload.js";
 import { rankPriceVersions } from "../lib/price_version_match.js";
+import { INVENTORY_MODEL_SOURCE } from "../lib/enrich_operation_model_from_inventory.js";
 import { persistPriceLookupAudit } from "../lib/persist_price_lookup_audit.js";
 import {
   closureBlocksCalculation,
@@ -27,7 +28,7 @@ function priceBrandAliases(value) {
 
 async function lookupPrice(sql, vin, fecha) {
   const inventoryRows = await sql`
-    SELECT vin_chasis, marca, desc_abrev, tipo_motor, norma
+    SELECT vin_chasis, marca, modelo, desc_abrev, tipo_motor, norma
     FROM inventario_vehiculos_global_raw
     WHERE UPPER(TRIM(vin_chasis)) = ${normalize(vin)}
     LIMIT 1
@@ -156,6 +157,8 @@ export async function calculateBonusRequest({
       marca: lookup.inventory.marca,
       marca_canonica: canonicalPriceBrand(lookup.inventory.marca),
       desc_abrev: lookup.inventory.desc_abrev,
+      modelo: lookup.inventory.modelo,
+      modelo_source: INVENTORY_MODEL_SOURCE,
       tipo_motor: lookup.inventory.tipo_motor,
       norma: lookup.inventory.norma,
     },

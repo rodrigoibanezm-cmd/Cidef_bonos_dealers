@@ -21,6 +21,15 @@
 .auditBody strong { font-size: 12px; }
 .auditObservations ul { margin: 0; padding-left: 18px; }
 .auditObservations li { font-size: 12px; font-weight: 700; }
+.inventoryFc { background: #fff; border: 1px solid #d9e5f2; border-left: 5px solid #4b78a8; border-radius: 12px; margin: 0 auto 14px; max-width: 1500px; overflow: hidden; }
+.inventoryFcHeader { align-items: center; border-bottom: 1px solid #e8eef5; display: flex; justify-content: space-between; padding: 12px 16px; }
+.inventoryFcHeader div { display: grid; gap: 2px; }
+.inventoryFcHeader small, .inventoryFcGrid small { color: #718096; font-size: 10px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.inventoryFcHeader span { background: #eef4fb; border-radius: 999px; color: #315f8f; font-size: 10px; font-weight: 800; padding: 6px 9px; }
+.inventoryFc p { color: #42556d; font-size: 13px; margin: 0; padding: 12px 16px 0; }
+.inventoryFcGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); padding-top: 10px; }
+.inventoryFcGrid > div { border-right: 1px solid #edf0f3; border-top: 1px solid #edf0f3; display: grid; gap: 5px; min-height: 58px; padding: 12px 16px; }
+.inventoryFcGrid strong { font-size: 13px; overflow-wrap: anywhere; }
 .documentHeader { align-items: center; display: flex; justify-content: space-between; margin: 0 auto 10px; max-width: 1500px; }
 .documentHeader div { display: grid; gap: 3px; }
 .documentHeader div span { color: #7b8494; font-size: 12px; }
@@ -63,4 +72,4 @@
 .priceGrid strong { font-size: 14px; overflow-wrap: anywhere; }
 .priceTotal strong { font-size: 20px; }
 .finalApproval { border-top: 1px solid #e8ecf0; padding-bottom: 2px; }
-@media (max-width: 900px) { .screen { padding: 18px 14px 30px; } .auditBody { grid-template-columns: 1fr; } .auditBody > div + div { border-left: 0; border-top: 1px solid #edf0f3; } .grid { grid-template-columns: 1fr; } .imageStage { height: 70vh; min-height: 520px; } .dataPanel { min-height: auto; } .priceGrid { grid-template-columns: 1fr; } }
+@media (max-width: 900px) { .screen { padding: 18px 14px 30px; } .auditBody, .inventoryFcGrid { grid-template-columns: 1fr; } .auditBody > div + div { border-left: 0; border-top: 1px solid #edf0f3; } .grid { grid-template-columns: 1fr; } .imageStage { height: 70vh; min-height: 520px; } .dataPanel { min-height: auto; } .priceGrid { grid-template-columns: 1fr; } }

@@ -31,6 +31,7 @@ Relevant fields observed:
 
 - `vin_chasis`
 - `marca`
+- `modelo`
 - `desc_abrev`
 - `tipo_motor`
 - `tipo_ficha`
@@ -92,7 +93,7 @@ First retrieve the VIN row from inventory.
 
 Normalize strings only for comparison; preserve original values in output/evidence.
 
-Use evidence from `desc_abrev` plus the technical fingerprint. Recommended matching order:
+Use deterministic `modelo` as the strongest trim/family signal, then evidence from `desc_abrev` plus the technical fingerprint. Recommended matching order:
 
 1. exact/near-exact brand match;
 2. model/family tokens from `desc_abrev` vs `modelo`;
@@ -102,6 +103,8 @@ Use evidence from `desc_abrev` plus the technical fingerprint. Recommended match
 6. fuel type;
 7. EURO norm;
 8. trim token (`LITE`, `ULTIMATE`, `E1`, `E2`, etc.).
+
+When `inventario.modelo` distinguishes a trim such as `AEOLUS HUGE E2`, matching must preserve that signal and must not tie it with `HUGE ICE E1 1.5T`.
 
 Use deterministic rules before fuzzy matching. Do not let the LLM invent a match.
 
