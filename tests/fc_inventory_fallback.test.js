@@ -14,6 +14,7 @@ function completeInventory(overrides = {}) {
   return {
     vin_chasis: VIN,
     marca: "DFM                           ",
+    modelo: "AEOLUS HUGE E2",
     desc_abrev: "HUGE 1.5T",
     ano: "2026",
     factura: "FVE",
@@ -154,8 +155,9 @@ test("caso real LGJE5EE08TM442158 reconstruye sólo valores observados", () => {
     nota_venta: "35235",
     dealer: "COMERCIAL COLON LIMITADA",
     marca: "DFM",
-    modelo: "HUGE 1.5T",
+    modelo: "AEOLUS HUGE E2",
   });
+  assert.equal(fc.modelo_source, "INVENTARIO_VIN");
 });
 
 test("FC reconstruida alimenta los campos canónicos y conserva evidencia append-only", async () => {

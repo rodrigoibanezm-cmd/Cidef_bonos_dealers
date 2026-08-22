@@ -116,6 +116,16 @@ Para reposición deben conservarse explícitamente:
 - monto
 - evidencia de asociación
 
+## Enriquecimiento de modelo por VIN
+
+Después de obtener un VIN canónico y antes de persistir cualquier extracción full, el pipeline usa el helper compartido `enrich_operation_model_from_inventory.js`.
+
+- Si el documento ya informa `modelo`, se conserva sin cambios.
+- Si `modelo` está vacío, se completa sólo cuando existe exactamente una fila con `vin_chasis` exacto y `inventario.modelo` no está vacío.
+- La evidencia se registra como `modelo_source = INVENTARIO_VIN`.
+- Sin VIN, con cero/múltiples filas o con modelo de inventario vacío, el flujo continúa sin completar ni bloquear.
+- Aplica a FC, FV, INSCRIPCION, FINANCIAMIENTO y REPOSICION, sin depender de FC ni del orden documental.
+
 ## Persistencia y evidencia
 
 La extracción completa se persiste en tablas staging. Estas tablas son la fuente para los motores de auditoría.
