@@ -178,6 +178,7 @@ export async function calculateBonusRequest({
     bono_cierre_historico: calculated.bono_cierre_historico,
     descuento_dealer_residual: calculated.descuento_dealer_residual,
     descuento_dealer_aprobado: calculated.descuento_dealer_aprobado,
+    descuento_dealer_source: calculated.descuento_dealer_source,
     calculation_status: calculated.calculation_status,
     review_reasons: calculated.review_reasons,
   };
@@ -196,7 +197,7 @@ export async function calculateBonusRequest({
       marca=${row.marca}, modelo=${row.modelo}, price_version_id=${row.price_version_id},
       lista_precio_utilizada=${row.source_file}, precio_lista_venta=${precioLista},
       bono_cidef=${bonuses.bono_cidef}, bono_fin_venta=${bonuses.bono_fin_venta},
-      bono_cierre_venta=${bonuses.bono_cierre_venta}, descuentos_dealer=${ruleInput.descuentos_dealer},
+      bono_cierre_venta=${bonuses.bono_cierre_venta}, descuentos_dealer=${calculated.descuento_dealer_aprobado},
       fac_compra_ok=${flags.fac_compra_ok}, fac_venta_ok=${flags.fac_venta_ok},
       inscripcion_venta_ok=${flags.inscripcion_venta_ok}, fac_reposicion_ok=${flags.fac_reposicion_ok},
       carta_credito_ok=${flags.carta_credito_ok}, pdv_ok=${calculated.pdv_ok},
@@ -207,11 +208,16 @@ export async function calculateBonusRequest({
       total_devolver=${totalDevolver},
       requiere_revision_humana=case
         when ${calculated.calculation_status}='REQUIERE_REVISION' then true
+        when ${calculated.calculation_status}='OK' then false
         else requiere_revision_humana
       end,
       price_lookup_status='ok', price_lookup_evidence=null, updated_at=now()
     WHERE id=${requestId}
   `;
+
+  const reason = calculated.calculation_status === "REQUIERE_REVISION"
+    ? (calculated.review_reasons[0] || "CALCULATION_REQUIRES_REVIEW")
+    : calculated.pdv_ok === "OK" ? null : "DESCUENTO_DEALER_REQUIRED";
 
   const currentClosure = await persistCurrentCalculationClosure({
     request,
@@ -220,18 +226,14 @@ export async function calculateBonusRequest({
       pdv_ok: calculated.pdv_ok,
       total_devolver: totalDevolver,
       price_lookup_status: "ok",
-      reason: calculated.calculation_status === "REQUIERE_REVISION"
-        ? "BONO_CIERRE_OVERRIDE_REQUIERE_REVISION"
-        : calculated.pdv_ok === "OK" ? null : "DESCUENTO_DEALER_EVIDENCE_REQUIRED",
+      reason,
     },
     sql,
   });
 
   return {
     status: calculated.calculation_status === "OK" ? "ok" : "pending",
-    reason: calculated.calculation_status === "REQUIERE_REVISION"
-      ? "BONO_CIERRE_OVERRIDE_REQUIERE_REVISION"
-      : calculated.pdv_ok === "OK" ? null : "DESCUENTO_DEALER_EVIDENCE_REQUIRED",
+    reason,
     request_id: requestId,
     ...bonuses,
     ...flags,
