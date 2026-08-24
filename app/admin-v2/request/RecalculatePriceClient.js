@@ -32,19 +32,20 @@ export default function RecalculatePriceClient({ requestId, currentDiscount = nu
   }
 
   return <div className={styles.finalApproval}>
-    <label className={styles.auditorLabel}>Descuento dealer manual
+    <label className={styles.auditorLabel}>Descuento dealer
       <input
         type="number"
         min="0"
         step="1"
         value={discount}
         onChange={(e) => setDiscount(e.target.value)}
-        placeholder="Ingresar monto"
+        placeholder="Monto calculado o corregido"
       />
     </label>
+    <small>Se calcula automáticamente como residual. Puedes corregirlo manualmente y recalcular.</small>
     {message ? <p className={styles.error}>{message}</p> : null}
     <button type="button" className={styles.approve} disabled={busy || discount === ""} onClick={recalculate}>
-      {busy ? "Recalculando..." : "Recalcular bonos"}
+      {busy ? "Recalculando..." : "Recalcular total"}
     </button>
   </div>;
 }
