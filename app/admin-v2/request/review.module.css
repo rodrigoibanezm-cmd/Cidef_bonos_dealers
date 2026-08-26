@@ -40,6 +40,9 @@
 .grid { display: grid; gap: 14px; grid-template-columns: minmax(0, 1.25fr) minmax(360px, .75fr); margin: 0 auto; max-width: 1500px; }
 .visualPanel, .dataPanel { background: #fff; border: 1px solid #e1e6ec; border-radius: 14px; overflow: hidden; }
 .panelTitle { background: #fafbfc; border-bottom: 1px solid #e8ecf0; color: #596579; font-size: 11px; font-weight: 800; letter-spacing: .05em; padding: 12px 14px; text-transform: uppercase; }
+.priceLookupHint { background: #fff8e8; border-bottom: 1px solid #ecdcae; display: grid; gap: 3px; padding: 10px 14px; }
+.priceLookupHint small { color: #8b6b23; font-size: 10px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.priceLookupHint strong { color: #172033; font-size: 15px; }
 .imageStage { align-items: flex-start; background: #eef1f4; display: flex; height: calc(100vh - 245px); justify-content: center; min-height: 620px; overflow: auto; padding: 18px; }
 .reviewImage { background: #fff; box-shadow: 0 3px 16px rgba(23,32,51,.12); display: block; height: auto; max-width: 100%; object-fit: contain; }
 .originalAction { border-top: 1px solid #e8ecf0; padding: 10px 14px; text-align: right; }
