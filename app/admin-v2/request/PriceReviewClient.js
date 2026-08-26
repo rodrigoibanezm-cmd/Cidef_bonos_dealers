@@ -14,7 +14,7 @@ const EDITABLE_FIELDS = [
 const READ_ONLY_FIELDS = [
   ["lista_precio_utilizada", "Lista de precios utilizada", "text"],
   ["price_version_id", "Versión precio", "text"],
-  ["pdv_ok", "PDV", "text"],
+  ["pdv_ok", "Validación precio de venta", "text"],
   ["bono_dif", "Diferencia precio calculada", "money"],
   ["bono_cierre", "Bono cierre a pagar", "money"],
   ["bono_fin", "Bono financiamiento a pagar", "money"],
