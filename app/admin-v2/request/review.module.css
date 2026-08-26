@@ -55,6 +55,9 @@
 .fieldText small { color: #818a99; font-size: 11px; }
 .fieldText strong { color: #172033; font-size: 15px; overflow-wrap: anywhere; }
 .fieldText input { border: 1px solid #cfd7e1; border-radius: 8px; font: inherit; min-width: 220px; padding: 8px 9px; }
+.matchOk, .matchBad { border-radius: 999px; font-size: 10px; font-weight: 800; justify-self: start; padding: 5px 8px; }
+.matchOk { background: #eaf7ef; color: #25834b; }
+.matchBad { background: #fdecec; color: #b42318; }
 .editButton, .okButton { border: 0; border-radius: 8px; cursor: pointer; font-size: 11px; font-weight: 800; padding: 8px 10px; }
 .editButton { background: #eef4ff; color: #285fb5; }
 .okButton { background: #eaf7ef; color: #25834b; }
