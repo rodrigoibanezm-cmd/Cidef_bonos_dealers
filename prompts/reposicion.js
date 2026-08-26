@@ -11,9 +11,10 @@ REGLAS
 5. "VEHICULO:" en Observaciones puede repetir el mismo identificador y sirve como confirmación.
 6. vin_original corresponde al vehículo reemplazado solo si aparece explícitamente en el documento. Si no aparece, null. Nunca lo tomes del nombre del archivo.
 7. Extrae nombre y RUT del dealer/concesionario receptor solo si aparecen explícitamente en el documento.
-8. No confundas Motor, Código Inf.Técnico, Nota de Venta, folio, patente u otros identificadores con Chassis.
-9. Si un campo no existe o no es legible con certeza, devuelve null.
-10. No completes usando conocimiento externo ni el nombre del archivo.
+8. Extrae marca, modelo y version del VEHÍCULO DE REPOSICIÓN usando únicamente el texto visible de la descripción del artículo, Código Modelo u otra identificación explícita del vehículo. marca debe ser la marca comercial; modelo, la familia/modelo; version, la variante completa cuando sea visible.
+9. No confundas Motor, Código Inf.Técnico, Nota de Venta, folio, patente u otros identificadores con Chassis.
+10. Si un campo no existe o no es legible con certeza, devuelve null.
+11. No completes usando conocimiento externo ni el nombre del archivo.
 
 Devuelve únicamente JSON conforme al schema entregado por la API.
 `;
