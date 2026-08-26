@@ -3,11 +3,11 @@
 import { useMemo, useState } from "react";
 import styles from "./review.module.css";
 
-const DATE_FIELDS = new Set(["fecha_factura_compra", "fecha_factura_venta"]);
-const MONEY_FIELDS = new Set(["precio_compra_total", "precio_venta_total"]);
-function formatDate(value){const raw=String(value||"").trim();const m=raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);return m?`${m[3]}-${m[2]}-${m[1]}`:raw||"-";}
-function formatClp(value){const n=Number(value);return Number.isFinite(n)?`$ ${Math.trunc(n).toLocaleString("es-CL")}`:String(value||"-");}
-function displayValue(key,value){if(value===true)return"Sí";if(value===false)return"No";if(value===null||value===undefined||value==="")return"-";if(DATE_FIELDS.has(key))return formatDate(value);if(MONEY_FIELDS.has(key))return formatClp(value);return String(value);}
+const DATE_KEY=/fecha|date/i;
+const MONEY_KEY=/precio|monto|total|bono|descuento|valor/i;
+function formatDate(value){const raw=String(value||"").trim();const m=raw.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s].*)?$/);return m?`${m[3]}-${m[2]}-${m[1]}`:raw||"-";}
+function formatClp(value){const normalized=typeof value==="string"?value.replace(/[$.\s]/g,"").replace(",","."):value;const n=Number(normalized);return Number.isFinite(n)?`$${Math.trunc(n).toLocaleString("es-CL")}`:String(value||"-");}
+function displayValue(key,value){if(value===true)return"Sí";if(value===false)return"No";if(value===null||value===undefined||value==="")return"-";if(DATE_KEY.test(key))return formatDate(value);if(MONEY_KEY.test(key))return formatClp(value);return String(value);}
 function jpgName(document){const key=String(document.file_id||"");const last=key.split("/").pop();return last&&/\.jpe?g$/i.test(last)?last:(document.file_name||document.document_type);}
 
 export default function ReviewClient({requestId,document,fields,step,total,previousType,nextType}){
