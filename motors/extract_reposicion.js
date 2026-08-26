@@ -6,7 +6,7 @@ import {
   targetedContract,
 } from "../lib/targeted_document_extraction.js";
 
-const CONTRACT_VERSION = "1";
+const CONTRACT_VERSION = "2";
 
 const REPOSICION_SCHEMA_V1 = {
   type: "object",
@@ -17,6 +17,9 @@ const REPOSICION_SCHEMA_V1 = {
     vin_original: { type: "string", nullable: true },
     nombre_dealer: { type: "string", nullable: true },
     rut_dealer: { type: "string", nullable: true },
+    marca: { type: "string", nullable: true },
+    modelo: { type: "string", nullable: true },
+    version: { type: "string", nullable: true },
   },
   required: [
     "documento_valido",
@@ -25,6 +28,9 @@ const REPOSICION_SCHEMA_V1 = {
     "vin_original",
     "nombre_dealer",
     "rut_dealer",
+    "marca",
+    "modelo",
+    "version",
   ],
 };
 
@@ -91,6 +97,9 @@ export async function extractReposicion({
     vin_original: vinOriginal || null,
     nombre_dealer: extracted.nombre_dealer || null,
     rut_dealer: extracted.rut_dealer || null,
+    marca: extracted.marca || null,
+    modelo: extracted.modelo || null,
+    version: extracted.version || null,
     parse_error: extracted._parse_error === true,
     status: !documentoValido ? "INVALID_DOCUMENT" : vinNuevo ? "OK" : "VIN_UNREADABLE",
   };
