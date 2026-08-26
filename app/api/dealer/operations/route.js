@@ -4,18 +4,20 @@ import { db } from "../../../../lib/db.js";
 export const runtime = "nodejs";
 
 function actionFor(row) {
-  if (!row.has_fc) return { label: "Subir factura compra", document_type: "FC" };
-  if (!row.has_fv) return { label: "Subir factura venta", document_type: "FV" };
-  if (!row.has_inscrip) return { label: "Subir inscripción", document_type: "INSCRIP" };
-  if (row.financiado_forum === true && !row.has_carta) return { label: "Subir carta financiamiento", document_type: "CARTA_FINANCIAMIENTO" };
+  if (row.documentacion_estado === "COMPLETA") return null;
+  if (row.fc_status !== "OK") return { label: "Subir factura compra", document_type: "FC" };
+  if (row.fv_status !== "OK") return { label: "Subir factura venta", document_type: "FV" };
+  if (row.inscripcion_status !== "OK") return { label: "Subir inscripción", document_type: "INSCRIP" };
+  if (row.financiado_forum === true && row.financiamiento_status !== "OK") {
+    return { label: "Subir carta financiamiento", document_type: "CARTA_FINANCIAMIENTO" };
+  }
   return null;
 }
 
 function statusFor(row) {
   if (row.estado === "APROBADA") return "APROBADO";
-  const action = actionFor(row);
-  if (action) return "FALTA_DOCUMENTO";
-  if (row.estado === "INGRESADA") return "EN_REVISION";
+  if (row.documentacion_estado === "COMPLETA") return "EN_REVISION";
+  if (actionFor(row)) return "FALTA_DOCUMENTO";
   return "PROCESANDO";
 }
 
@@ -32,22 +34,12 @@ export async function GET() {
         r.submitted_at,
         r.approved_at,
         r.financiado_forum,
-        exists (
-          select 1 from bonus_request_documents d
-          where d.request_id = r.id and d.document_type = 'FC'
-        ) as has_fc,
-        exists (
-          select 1 from bonus_request_documents d
-          where d.request_id = r.id and d.document_type = 'FV'
-        ) as has_fv,
-        exists (
-          select 1 from bonus_request_documents d
-          where d.request_id = r.id and d.document_type = 'INSCRIP'
-        ) as has_inscrip,
-        exists (
-          select 1 from bonus_request_documents d
-          where d.request_id = r.id and d.document_type in ('CARTA', 'CARTA_FINANCIAMIENTO')
-        ) as has_carta
+        r.documentacion_estado,
+        r.fc_status,
+        r.fv_status,
+        r.inscripcion_status,
+        r.financiamiento_status,
+        r.total_devolver
       from bonus_requests r
       where r.tenant_id = ${tenantId}
       order by coalesce(r.submitted_at, r.created_at) desc
@@ -65,7 +57,7 @@ export async function GET() {
         id: row.id,
         vin: row.vin,
         status: statusFor(row),
-        amount: null,
+        amount: row.total_devolver,
         days_sent: days,
         action,
       };
