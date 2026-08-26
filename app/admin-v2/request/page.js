@@ -17,7 +17,7 @@ const FIELD_MAP = {
 const AUDIT_LABELS={
   REQUIERE_REVISION_HUMANA:"Requiere revisión humana",
   CALCULATION_REQUIRES_REVIEW:"El cálculo requiere revisión",
-  PDV_PENDING:"Falta validar el precio de venta",
+  PDV_PENDING:"Falta validar la cuadratura del precio de venta",
   TOTAL_DEVOLVER_PENDING:"Falta calcular el total a devolver",
   FECHA_VENTA_REQUIRED:"Falta la fecha de venta",
   PRICE_LOOKUP_NOT_FOUND:"No se encontró precio aplicable",
