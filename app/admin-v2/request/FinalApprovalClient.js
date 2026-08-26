@@ -7,6 +7,7 @@ export default function FinalApprovalClient({ requestId, auditors }) {
   const [auditorId, setAuditorId] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const priceHref = `/admin-v2/request?id=${encodeURIComponent(requestId)}&stage=prices`;
 
   async function approve() {
     if (!auditorId || busy) return;
@@ -35,8 +36,11 @@ export default function FinalApprovalClient({ requestId, auditors }) {
       </select>
     </label>
     {message ? <p className={styles.error}>{message}</p> : null}
-    <button type="button" className={styles.approve} disabled={!auditorId || busy} onClick={approve}>
-      {busy ? "Aprobando..." : "Aprobar solicitud completa →"}
-    </button>
+    <div className={styles.finalActions}>
+      <a className={styles.backAction} href={priceHref}>← Anterior: precios</a>
+      <button type="button" className={styles.approve} disabled={!auditorId || busy} onClick={approve}>
+        {busy ? "Aprobando..." : "Aprobar solicitud completa →"}
+      </button>
+    </div>
   </div>;
 }
