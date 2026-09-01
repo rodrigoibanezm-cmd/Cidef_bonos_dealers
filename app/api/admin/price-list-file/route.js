@@ -17,8 +17,23 @@ export async function GET(request) {
     if (!requestId) return NextResponse.json({ ok: false, error: "Missing request_id" }, { status: 400 });
 
     const sql = db();
-    const rows = await sql`select lista_precio_utilizada from bonus_requests where id=${requestId} limit 1`;
-    const filename = safeFilename(rows[0]?.lista_precio_utilizada);
+    const rows = await sql`
+      select
+        br.lista_precio_utilizada,
+        (
+          select a.evidence->>'source_file'
+          from bonus_price_lookup_audits a
+          where a.request_id=br.id
+            and a.status='ok'
+            and coalesce(a.evidence->>'source_file','')<>''
+          order by a.created_at desc
+          limit 1
+        ) as audit_source_file
+      from bonus_requests br
+      where br.id=${requestId}
+      limit 1
+    `;
+    const filename = safeFilename(rows[0]?.lista_precio_utilizada || rows[0]?.audit_source_file);
     if (!filename) return NextResponse.json({ ok: false, error: "Price list not found" }, { status: 404 });
 
     const object = await getR2Object(`precios/${filename}`);
