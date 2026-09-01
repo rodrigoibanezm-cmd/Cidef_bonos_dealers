@@ -23,7 +23,7 @@ export async function GET(request) {
         (
           select a.evidence->>'source_file'
           from bonus_price_lookup_audits a
-          where a.request_id=br.id
+          where a.request_id::text=br.id::text
             and a.status='ok'
             and coalesce(a.evidence->>'source_file','')<>''
           order by a.created_at desc
@@ -42,7 +42,7 @@ export async function GET(request) {
         ? "application/vnd.ms-excel.sheet.binary.macroEnabled.12"
         : object.contentType,
       "Content-Disposition": `inline; filename*=UTF-8''${encodeURIComponent(filename)}`,
-      "Cache-Control": "private, max-age=300",
+      "Cache-Control": "public, max-age=300",
     }});
   } catch (error) {
     console.error("Price list preview failed", error);
