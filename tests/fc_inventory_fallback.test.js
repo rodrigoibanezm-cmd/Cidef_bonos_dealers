@@ -37,7 +37,7 @@ function operationSql({ documentaryFc = null, inventoryRows = [] } = {}) {
     queries.push(text);
     if (text.includes("bonus_fv_extractions")) return [{ vin: VIN, nombre_dealer: "COMERCIAL COLON LIMITADA", status: "OK" }];
     if (text.includes("bonus_fc_extractions")) return documentaryFc ? [documentaryFc] : [];
-    if (text.includes("inventario_vehiculos_global_raw")) return inventoryRows;
+    if (text.includes("from vehiculos_raw")) return inventoryRows;
     return [];
   };
   return { sql, queries };
@@ -59,7 +59,7 @@ test("loader no consulta inventario cuando existe FC documental", async () => {
   const { sql, queries } = operationSql({ documentaryFc, inventoryRows: [completeInventory()] });
   const documents = await loadBonusOperationDocuments({ sql, tenantId: "dealer_demo", vin: VIN });
   assert.strictEqual(documents.fc, documentaryFc);
-  assert.equal(queries.some((text) => text.includes("inventario_vehiculos_global_raw")), false);
+  assert.equal(queries.some((text) => text.includes("from vehiculos_raw")), false);
 });
 
 test("FC ausente con inventario completo se reconstruye y permite continuar", () => {
@@ -99,7 +99,7 @@ test("loader aplica el fallback de inventario sólo cuando FC documental falta",
   const { sql, queries } = operationSql({ inventoryRows: [completeInventory()] });
   const documents = await loadBonusOperationDocuments({ sql, tenantId: "dealer_demo", vin: VIN });
   assert.equal(documents.fc.fc_reconstruida, true);
-  assert.equal(queries.some((text) => text.includes("inventario_vehiculos_global_raw")), true);
+  assert.equal(queries.some((text) => text.includes("from vehiculos_raw")), true);
 });
 
 test("FC ausente con inventario incompleto sigue como faltante", () => {

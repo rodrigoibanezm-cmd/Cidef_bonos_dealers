@@ -17,34 +17,32 @@ and returns the applicable commercial price record and all centralized CIDEF bon
 
 Expected logical flow:
 
-`VIN -> inventario_vehiculos_global_raw -> homologate price_versions -> latest price_history.vigencia_desde <= fecha -> price + bonuses`
+`VIN -> vehiculos_raw (+ ventas_raw) -> homologate price_versions -> latest price_history.vigencia_desde <= fecha -> price + bonuses`
 
 Do not query raw XLS files at runtime. Runtime source of truth is Neon.
 
 ## Existing Neon tables
 
-### inventario_vehiculos_global_raw
+### vehiculos_raw + ventas_raw
 
-Use `vin_chasis` as VIN key.
+Use `vehiculos_raw.vin_chasis` as VIN key and `ventas_raw.nro_vin_chasis` for the deterministic complement.
 
 Relevant fields observed:
 
 - `vin_chasis`
 - `marca`
 - `modelo`
-- `desc_abrev`
-- `tipo_motor`
+- `ventas_raw.desc_articulo` as commercial descriptor
 - `tipo_ficha`
-- `norma`
-- `peso_bruto`
 - `ano`
-- `ano_fabricacion`
 
-`desc_abrev` is often the strongest commercial descriptor. Example:
+`ventas_raw.desc_articulo` is often the strongest commercial descriptor. Example:
 
 `G7 2.0L MT 4X4 E6 LITE`
 
 ### price_versions
+
+Operational status: this table is not currently present on Neon `main`; the motor returns `PRICE_TABLES_MISSING_IN_MAIN` instead of throwing until the source is restored.
 
 Canonical vehicle identity. Current relevant fields:
 
@@ -67,6 +65,8 @@ Canonical vehicle identity. Current relevant fields:
 `price_version_id` is a stable DB ID. Do not derive it from VIN, price, date or bonuses.
 
 ### price_history
+
+Operational status: this table is not currently present on Neon `main`; it still exists on branch `respaldo` and has no renamed equivalent on `main`.
 
 Historical commercial values by canonical version and validity date.
 

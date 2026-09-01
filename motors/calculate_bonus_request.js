@@ -12,8 +12,10 @@ function canonicalPriceBrand(value) { const brand=normalize(value); if (["DFLM",
 function priceBrandAliases(value) { const brand=canonicalPriceBrand(value); return brand==="DONGFENG"?["DONGFENG","DFM","DFLM"]:[brand]; }
 
 async function lookupPrice(sql, vin, fecha) {
-  const inventoryRows=await sql`SELECT vin_chasis, marca, modelo, desc_abrev, tipo_motor, norma FROM inventario_vehiculos_global_raw WHERE UPPER(TRIM(vin_chasis))=${normalize(vin)} LIMIT 1`;
+  const inventoryRows=await sql`SELECT v.vin_chasis, v.marca, v.modelo, venta.desc_articulo AS desc_abrev, NULL::text AS tipo_motor, NULL::text AS norma FROM vehiculos_raw v LEFT JOIN LATERAL (SELECT desc_articulo FROM ventas_raw WHERE UPPER(TRIM(nro_vin_chasis))=${normalize(vin)} ORDER BY fecha_factura DESC NULLS LAST LIMIT 1) venta ON true WHERE UPPER(TRIM(v.vin_chasis))=${normalize(vin)} LIMIT 1`;
   const inventory=inventoryRows[0]; if(!inventory)return {status:"not_found",reason:"VIN_NOT_IN_INVENTORY"};
+  const [priceTables]=await sql`SELECT to_regclass('public.price_versions') IS NOT NULL AS has_versions, to_regclass('public.price_history') IS NOT NULL AS has_history`;
+  if(!priceTables?.has_versions||!priceTables?.has_history)return {status:"unavailable",reason:"PRICE_TABLES_MISSING_IN_MAIN",inventory};
   const brandAliases=priceBrandAliases(inventory.marca);
   const candidates=await sql`SELECT pv.*, ph.price_history_id, ph.vigencia_desde, ph.precio_neto, ph.precio_lista, ph.precio_con_iva, ph.bono_cidef, ph.bono_forum, ph.bono_mes, ph.raw_payload, ph.source_file, ph.source_sheet, ph.source_row FROM price_versions pv JOIN LATERAL (SELECT * FROM price_history ph WHERE ph.price_version_id=pv.price_version_id AND ph.vigencia_desde<=${fecha} ORDER BY ph.vigencia_desde DESC, ph.created_at DESC LIMIT 1) ph ON true WHERE UPPER(TRIM(pv.marca))=ANY(${brandAliases}) AND pv.activo=true`;
   const ranked=rankPriceVersions(inventory,candidates); if(!ranked.length||ranked[0].score<=0)return {status:"not_found",inventory};

@@ -45,33 +45,38 @@ export async function refreshSupervisorDealerAnalytics() {
       refreshed_at
     )
     with inventario as (
-      select distinct on (trim(dealer_venta), trim(vin_chasis))
-        trim(dealer_venta) as dealer,
-        dealer_rut,
-        trim(vin_chasis) as vin,
-        marca,
-        desc_abrev as modelo,
-        vendedor,
+      select distinct on (dm.dealer_id, trim(v.vin_chasis))
+        dm.dealer_id,
+        dm.razon_social_canonica as dealer,
+        dm.rut_normalizado as dealer_rut,
+        trim(v.vin_chasis) as vin,
+        v.marca,
+        v.modelo,
+        v.vendedor,
         case
-          when trim(fecha_factura) ~ '^\\d{4}-\\d{2}-\\d{2}$' then trim(fecha_factura)::date
-          when trim(fecha_factura) ~ '^\\d{1,2}/\\d{1,2}/\\d{4}$' then to_date(trim(fecha_factura), 'DD/MM/YYYY')
+          when trim(v.fecha_factura) ~ '^\\d{4}-\\d{2}-\\d{2}$' then trim(v.fecha_factura)::date
+          when trim(v.fecha_factura) ~ '^\\d{1,2}/\\d{1,2}/\\d{4}$' then to_date(trim(v.fecha_factura), 'DD/MM/YYYY')
+          when trim(v.fecha_factura) ~ '^\\d{1,2}/\\d{1,2}/\\d{2}(\\s|$)' then to_date(split_part(trim(v.fecha_factura), ' ', 1), 'MM/DD/YY')
           else null
         end as fecha_factura_date,
         case
-          when trim(fecha_ingreso_stk) ~ '^\\d{4}-\\d{2}-\\d{2}$' then trim(fecha_ingreso_stk)::date
-          when trim(fecha_ingreso_stk) ~ '^\\d{1,2}/\\d{1,2}/\\d{4}$' then to_date(trim(fecha_ingreso_stk), 'DD/MM/YYYY')
+          when trim(v.fecha_ingreso_stk) ~ '^\\d{4}-\\d{2}-\\d{2}$' then trim(v.fecha_ingreso_stk)::date
+          when trim(v.fecha_ingreso_stk) ~ '^\\d{1,2}/\\d{1,2}/\\d{4}$' then to_date(trim(v.fecha_ingreso_stk), 'DD/MM/YYYY')
+          when trim(v.fecha_ingreso_stk) ~ '^\\d{1,2}/\\d{1,2}/\\d{2}(\\s|$)' then to_date(split_part(trim(v.fecha_ingreso_stk), ' ', 1), 'MM/DD/YY')
           else null
         end as fecha_ingreso_stk_date
-      from inventario_vehiculos_global_raw
-      where es_dealer = true
-        and nullif(trim(vin_chasis), '') is not null
-        and nullif(trim(dealer_venta), '') is not null
+      from vehiculos_raw v
+      join dealers_master dm
+        on regexp_replace(upper(coalesce(dm.rut_normalizado, '')), '[^0-9K]', '', 'g') =
+           regexp_replace(upper(coalesce(v.rut, '')), '[^0-9K]', '', 'g')
+      where nullif(trim(v.vin_chasis), '') is not null
       order by
-        trim(dealer_venta),
-        trim(vin_chasis),
+        dm.dealer_id,
+        trim(v.vin_chasis),
         case
-          when trim(fecha_factura) ~ '^\\d{4}-\\d{2}-\\d{2}$' then trim(fecha_factura)::date
-          when trim(fecha_factura) ~ '^\\d{1,2}/\\d{1,2}/\\d{4}$' then to_date(trim(fecha_factura), 'DD/MM/YYYY')
+          when trim(v.fecha_factura) ~ '^\\d{4}-\\d{2}-\\d{2}$' then trim(v.fecha_factura)::date
+          when trim(v.fecha_factura) ~ '^\\d{1,2}/\\d{1,2}/\\d{4}$' then to_date(trim(v.fecha_factura), 'DD/MM/YYYY')
+          when trim(v.fecha_factura) ~ '^\\d{1,2}/\\d{1,2}/\\d{2}(\\s|$)' then to_date(split_part(trim(v.fecha_factura), ' ', 1), 'MM/DD/YY')
           else null
         end desc nulls last
     ),
@@ -86,7 +91,7 @@ export async function refreshSupervisorDealerAnalytics() {
       order by vin, created_at desc
     )
     select
-      dm.supervisor,
+      p.nombre_canonico as supervisor,
       i.dealer,
       i.dealer_rut,
       i.vin,
@@ -105,8 +110,11 @@ export async function refreshSupervisorDealerAnalytics() {
       s.financiado_forum,
       now()
     from inventario i
-    left join dealers_master dm
-      on trim(dm.dealer) = i.dealer
+    left join dealer_supervisor ds
+      on ds.dealer_id = i.dealer_id
+     and ds.vigente = true
+    left join personas_master p
+      on p.persona_id = ds.persona_id
     left join solicitudes s
       on trim(s.vin) = i.vin
   `;
